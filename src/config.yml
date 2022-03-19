@@ -1,0 +1,10 @@
+lr: 1e-4 # learning rate
+MAX_TRAIN_EPOCH: 10 # maximum number of training epoch
+DEV_EPOCH: 2 # how many epoch during training we run a dev set
+N_W2V: 300 # word2vec dimension
+kb_data_path: './MetaQA/kb.txt'
+1_hop_path: './MetaQA/1-hop/vanilla/'
+2_hop_path: './MetaQA/2-hop/vanilla/'
+3_hop_path: './MetaQA/3-hop/vanilla/'
+logger_file_name: './log/log01.txt'
+tensorboard_path: './tensorboard_log'
