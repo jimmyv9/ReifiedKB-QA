@@ -38,7 +38,8 @@ def make_model(config, kb_info):
             M_rel(matrix): dim (N_T, N_R)
             M_obj(matrix): dim (N_T, N_E)
     """
-    model = RefiedKBQA(config['N_W2V'], config['N_R'], kb_info)
+    if 'kb_multihop' == config['hidden_size']:
+        model = RefiedKBQA(config['N_W2V'], config['N_R'], kb_info)
     optimizer = optim.AdamW(model.parameters(), lr=config['lr'])
     criterion = nn.CrossEntropyLoss()
     return model, optimizer, criterion
