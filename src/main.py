@@ -28,12 +28,17 @@ def get_logger(file_name=None):
 
     return logger
 
-def make_model(config):
+def make_model(config, kb_info):
     """Build model, initalize optimizer and criterion
     Args:
         config(dict): from yaml
+        kb_info: M_subj, M_rel, M_obj matrixes where
+            M_subj(matrix): dim (N_T, N_E) where N_T is the number of
+                             triples in the KB
+            M_rel(matrix): dim (N_T, N_R)
+            M_obj(matrix): dim (N_T, N_E)
     """
-    model = RefiedKBQA(config['N_W2V'], config['N_R'])
+    model = RefiedKBQA(config['N_W2V'], config['N_R'], kb_info)
     optimizer = optim.AdamW(model.parameters(), lr=config['lr'])
     criterion = nn.CrossEntropyLoss()
     return model, optimizer, criterion
@@ -54,7 +59,7 @@ def run(config):
     # train
     # assume we have M_subj, M_rel, M_obj, and dataloaders for train and dev
     logger.info("Set up model, optimizer, and criterion")
-    model, optimizer, criterion = make_model(config)
+    model, optimizer, criterion = make_model(config, [M_subj, M_rel, M_obj])
 
     train_loss = []
     best_loss = 1e9
@@ -66,8 +71,10 @@ def run(config):
         for batch_idx, data in enumerate(train_dataloader):
             # forward
             x, q, n_hop, y = data
-            for i in range(n_hop):
-                x = model(x, q, i, M_subj, M_rel, M_obj)
+            if 'kb_multihop' == config['task']:
+                x = model(x, q, n_hop)
+            else:
+                raise ValueError
 
             # calculation loss
             loss = criterion(x, y)

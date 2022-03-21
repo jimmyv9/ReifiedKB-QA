@@ -8,3 +8,4 @@ kb_data_path: './MetaQA/kb.txt'
 3_hop_path: './MetaQA/3-hop/vanilla/'
 logger_file_name: './log/log01.txt'
 tensorboard_path: './tensorboard_log'
+task: 'kb_multihop' # kb_multihop, kb_completion
