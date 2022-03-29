@@ -64,7 +64,11 @@ def read_qa(filename, model, entities):
 
     with open(filename, 'r') as fin:
         testing_instances = []
+        i = 0
         for line in fin:
+            if i == 20:
+                break
+            i += 1
             question, answer = line.split("\t")
             all_words = parse_entities(question)
             # Get question embeddings
@@ -76,9 +80,12 @@ def read_qa(filename, model, entities):
                     embeddings.append(model[word.lower()])
                 else:
                     embeddings.append(model["UNK"])
-
             embeddings = np.array(embeddings)
-            q = np.mean(embeddings, axis=1) # mean pooling
+            print("Tokens: {} yield embedding of length {}".format(all_words, embeddings.shape))
+            try:
+                q = np.mean(embeddings, axis=0) # mean pooling
+            except:
+                print("Question {} could not be parsed".format(question))
             # Get answer as mapped entities
             all_answers = answer.strip().split('|')
             for ans in all_answers:
@@ -93,7 +100,9 @@ def parse_entities(sentence):
     entity_found = False
     entity = ""
     for word in sentence.split():
-        if entity_found == True:
+        if word[0] == "[" and word[-1] == "]":
+            tokens.append(word[1:-1])
+        elif entity_found == True:
             if word[-1] == ']':
                 entity += "_" + string.capwords(word[:-1])
                 tokens.append(entity)
@@ -124,7 +133,9 @@ def main():
     training_vals = read_qa(train_path, model, X)
     with open("./to_train.txt", 'w') as fout:
         for t in training_vals:
-            fout.write(t)
+            to_print = ""
+            to_print += str(list(t[0][1:-1])) + "\t" + str(t[1]) + "\n"
+            fout.write(to_print)
     return 0
 
 
