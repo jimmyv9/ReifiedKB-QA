@@ -1,4 +1,5 @@
 import sys
+import string
 import numpy as np
 import gensim.downloader as api
 from gensim.models import KeyedVectors
@@ -69,11 +70,17 @@ def read_qa(filename, model, entities):
             # Get question embeddings
             embeddings = []
             for word in all_words:
-                embeddings.append(model[word])
+                if word in model.index_to_key:
+                    embeddings.append(model[word])
+                elif word.lower() in model.index_to_key:
+                    embeddings.append(model[word.lower()])
+                else:
+                    embeddings.append(model["UNK"])
+
             embeddings = np.array(embeddings)
             q = np.mean(embeddings, axis=1) # mean pooling
             # Get answer as mapped entities
-            all_answers = answer.split('|')
+            all_answers = answer.strip().split('|')
             for ans in all_answers:
                 testing_instances.append((q, entities[ans]))
     return testing_instances
@@ -83,26 +90,26 @@ def parse_entities(sentence):
     Tokenizes sentence keeping entities together
     """
     tokens = []
-    entity_found = True
-    for word in sentence:
+    entity_found = False
+    entity = ""
+    for word in sentence.split():
         if entity_found == True:
             if word[-1] == ']':
-                entity += word[:-1]
+                entity += "_" + string.capwords(word[:-1])
                 tokens.append(entity)
                 entity_found = False
                 entity = ""
             else:
-                entity += word
+                entity += "_" + string.capwords(word)
         elif word[0] == '[':
             entity_found = True
-            entity = word[1:]
+            entity = string.capwords(word[1:])
         else:
             tokens.append(word)
     return tokens
 
 def main():
-    print(len(sys.argv))
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4:
         print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings`")
         sys.exit(-1)
     kb_path = sys.argv[1]
@@ -114,7 +121,7 @@ def main():
     R = {t[1] for t in triples} # extract relations
     print(R)
     model = api.load(emb_path)
-    training_vals = read_qa(test_path, model, X)
+    training_vals = read_qa(train_path, model, X)
     with open("./to_train.txt", 'w') as fout:
         for t in training_vals:
             fout.write(t)
