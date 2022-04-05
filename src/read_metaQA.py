@@ -7,6 +7,8 @@ import gensim.downloader as api
 from gensim.models import KeyedVectors
 import multiprocessing.dummy as mp
 
+from torch.utils.data import Dataset
+
 def read_triples(filename):
     """
     Reads triples from MetaQA knowledge base
@@ -174,7 +176,40 @@ def main():
                 fout.write(to_print)
     return 0
 
+class MetaQADataset(Dataset):
+    """
+    Define the dataset for MetaQA
+    """
+    def __init__(self, data):
+        """Initialize the dataset
+        Args:
+            data(list): a 2-D list with the structure
+                        [[input, label], [], ...]
+                        in details:
+                        [[[entity_embedding, question_embedding, n_hop], objective index],
+                         [], ...]
+        """
+        self.data = data
+        self.length = len(data)
 
+    def __getitem__(self, index):
+        """Get data based on the index from 1 to the length of the data
+        Args:
+            index(int): the index number
+
+        Return:
+            data(list): one line of data with the structure [intput, label]
+                        in details:
+                        [[entity_embedding, question_embedding, n_hop], objective index]
+        """
+        return self.data[index]
+
+    def __len__(self):
+        """Get the number of questions in MetaQA
+        Return:
+            length(int): the number of questions in MetaQA
+        """
+        return self.length
 
 if __name__ == '__main__':
     main()
