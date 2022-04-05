@@ -52,7 +52,52 @@ def extract_entities(triples):
         i += 1
     return X
 
+def extract_entity_embeddings(entities, model):
+    """
+    Extracts the embeddings from our model, and maps each entity to its unique
+    embedding
+    """
+    entity_embs = dict()
+    for ent in entities:
+        ent = ent.split()
+        ent = "_".join(ent)
+        if ent in model.index_to_key:
+            entity_embs[ent] = model[word]
+        elif ent.lower() in model.index_to_key:
+            entity_embs[ent] = model[word.lower()]
+        else:
+            entity_embs[ent] = model["UNK"]
+    return entity_embs
+
+def write_entity_embeddings(entity_embs, infile, outfile):
+    """
+    Outputs a file with entity embeddings for each entity subject in the order
+    they are found in the entity answer
+    """
+    with open(infile, 'r') as fin:
+        with open(outfile, 'w') as fout:
+            for line in fin:
+                sent = line.strip().split("[")
+                entity = sent[1].split("]")[0]
+                entity = "_".join(entity.split())
+                fout.write(str(entity_embs[entity])[1:-1])
+
+
 def parallel_qa(query, model, entities):
+    """
+    Takes in a single question, answer pair and returns the essential
+    components to train our neural networks
+
+    Inputs:
+        query (str): line of training file containing question and answer
+        model: gensim pretrained loaded model containing word embeddings
+        entities (dict): set of entities, mapped to their unique integer ID
+
+    Outputs:
+        testing_instances (q, A): q is the mean-pooled array which averages
+        each dimension of the embeddings in the question, A is the ID of the
+        entity in the answer
+    """
     testing_instances = []
     question, answer = query.split("\t")
     all_words = parse_entities(question)
@@ -156,13 +201,15 @@ def main():
     X = extract_entities(triples)
     R = {t[1] for t in triples} # extract relations
     model = api.load(emb_path)
+    X_embs = extract_entity_embeddings(X, model)
+    write_entity_embeddings(X_embs, train_path, "subj_embeddings.txt")
     with open(train_path, 'r') as fin:
         all_lines = fin.readlines()
     print(len(all_lines))
     start = time.time()
     p = mp.Pool(8)
     partial_qa = partial(parallel_qa, model=model, entities=X)
-    results = p.map(partial_qa, all_lines[:1000])
+    results = p.map(partial_qa, all_lines)
     p.close()
     p.join()
     print("Execution took {} seconds".format(time.time()-start))
