@@ -1,8 +1,11 @@
 import sys
 import string
 import numpy as np
+import time
+from functools import partial
 import gensim.downloader as api
 from gensim.models import KeyedVectors
+import multiprocessing.dummy as mp
 
 def read_triples(filename):
     """
@@ -47,6 +50,32 @@ def extract_entities(triples):
         i += 1
     return X
 
+def parallel_qa(query, model, entities):
+    testing_instances = []
+    question, answer = query.split("\t")
+    all_words = parse_entities(question)
+    # Get question embeddings
+    embeddings = []
+    for word in all_words:
+        if word in model.index_to_key:
+            embeddings.append(model[word])
+        elif word.lower() in model.index_to_key:
+            embeddings.append(model[word.lower()])
+        else:
+            embeddings.append(model["UNK"])
+    embeddings = np.array(embeddings)
+    try:
+        q = np.mean(embeddings, axis=0) # mean pooling
+    except:
+        print("Question {} could not be parsed".format(question))
+    # Get answer as mapped entities
+    all_answers = answer.strip().split('|')
+    for ans in all_answers:
+        testing_instances.append((q, entities[ans]))
+    return testing_instances
+
+
+
 def read_qa(filename, model, entities):
     """
     Extracts question answer as question answer pairs, where question is
@@ -64,11 +93,7 @@ def read_qa(filename, model, entities):
 
     with open(filename, 'r') as fin:
         testing_instances = []
-        i = 0
         for line in fin:
-            if i == 20:
-                break
-            i += 1
             question, answer = line.split("\t")
             all_words = parse_entities(question)
             # Get question embeddings
@@ -128,14 +153,25 @@ def main():
     triples = read_triples(kb_path)
     X = extract_entities(triples)
     R = {t[1] for t in triples} # extract relations
-    print(R)
     model = api.load(emb_path)
-    training_vals = read_qa(train_path, model, X)
+    with open(train_path, 'r') as fin:
+        all_lines = fin.readlines()
+    print(len(all_lines))
+    start = time.time()
+    p = mp.Pool(8)
+    partial_qa = partial(parallel_qa, model=model, entities=X)
+    results = p.map(partial_qa, all_lines[:1000])
+    p.close()
+    p.join()
+    print("Execution took {} seconds".format(time.time()-start))
+
+    #training_vals = read_qa(train_path, model, X)
     with open("./to_train.txt", 'w') as fout:
-        for t in training_vals:
-            to_print = ""
-            to_print += str(list(t[0][1:-1])) + "\t" + str(t[1]) + "\n"
-            fout.write(to_print)
+        for question in results:
+            for ans in question:
+                to_print = ""
+                to_print += str(list(ans[0][1:-1])) + "\t" + str(ans[1]) + "\n"
+                fout.write(to_print)
     return 0
 
 
