@@ -1,11 +1,12 @@
 import sys
+import os
 import string
 import numpy as np
 import time
 from functools import partial
 import gensim.downloader as api
 from gensim.models import KeyedVectors
-import multiprocessing.dummy as mp
+#import multiprocessing.dummy as mp
 
 from torch.utils.data import Dataset
 
@@ -24,6 +25,7 @@ def read_triples(filename):
     triples = set()
     with open(filename, 'r') as fin:
         for triple in fin:
+            triple = triple.replace("!", "").replace(",", "")
             triple = triple.split("|")
             triple[2] = triple[2].strip("\n")
             triple = tuple(triple)
@@ -98,30 +100,38 @@ def parallel_qa(query, model, entities):
         each dimension of the embeddings in the question, A is the ID of the
         entity in the answer
     """
-    testing_instances = []
     question, answer = query.split("\t")
-    all_words = parse_entities(question)
+    all_words, subj = parse_entities(question)
     # Get question embeddings
     embeddings = []
     for word in all_words:
-        if word in model.index_to_key:
-            embeddings.append(model[word])
-        elif word.lower() in model.index_to_key:
-            embeddings.append(model[word.lower()])
+        if word == subj:
+            subj_emb = get_emb_from_model(word, model)
+            embeddings.append(subj_emb)
         else:
-            embeddings.append(model["UNK"])
+            embeddings.append(get_emb_from_model(word, model))
+
     embeddings = np.array(embeddings)
     try:
         q = np.mean(embeddings, axis=0) # mean pooling
     except:
         print("Question {} could not be parsed".format(question))
     # Get answer as mapped entities
+    answer.replace(",","").replace("!", "")
     all_answers = answer.strip().split('|')
+    ans_ids = []
     for ans in all_answers:
-        testing_instances.append((q, entities[ans]))
-    return testing_instances
+        ans_ids.append(entities[ans])
+    ans_ids = np.array(ans_ids)
+    return (q, subj_emb, ans_ids)
 
-
+def get_emb_from_model(word, model):
+    if word in model.index_to_key:
+        return model[word]
+    elif word.lower() in model.index_to_key:
+        return model[word.lower()]
+    else:
+        return model["UNK"]
 
 def read_qa(filename, model, entities):
     """
@@ -171,15 +181,16 @@ def parse_entities(sentence):
     tokens = []
     entity_found = False
     entity = ""
+    sentence = sentence.replace(",", "").replace("!", "")
     for word in sentence.split():
         if word[0] == "[" and word[-1] == "]":
+            entity = word[1:-1]
             tokens.append(word[1:-1])
         elif entity_found == True:
             if word[-1] == ']':
                 entity += "_" + string.capwords(word[:-1])
                 tokens.append(entity)
                 entity_found = False
-                entity = ""
             else:
                 entity += "_" + string.capwords(word)
         elif word[0] == '[':
@@ -187,40 +198,65 @@ def parse_entities(sentence):
             entity = string.capwords(word[1:])
         else:
             tokens.append(word)
-    return tokens
+    return tokens, entity
+
+def get_pytorch_input(input_dir, nhop):
+    files = os.listdir(input_dir)
+    train_data = []
+    for f in files:
+        path = input_dir + "/" + f
+        with open(path, 'r') as fin:
+            for line in fin:
+                line = line.split('\t')
+                q = line[0].strip()
+                q = np.array([float(x) for x in q.split()])
+                subj = line[1].strip()
+                subj = np.array([float(x) for x in subj.split()])
+                a = line[2].strip().split()
+                a = [int(x) for x in a]
+                for ent in a:
+                    instance = [[q, subj, nhop], ent]
+                    train_data.append(instance)
+    return train_data
+
 
 def main():
-    if len(sys.argv) != 4:
-        print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings`")
+    if len(sys.argv) != 7:
+        print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings outfile a b`")
         sys.exit(-1)
     kb_path = sys.argv[1]
     train_path = sys.argv[2]
     emb_path = sys.argv[3]
+    outfile_path = sys.argv[4]
+    a = int(sys.argv[5])
+    b = int(sys.argv[6])
 
     triples = read_triples(kb_path)
     X = extract_entities(triples)
     R = {t[1] for t in triples} # extract relations
+    start = time.time()
     model = api.load(emb_path)
-    X_embs = extract_entity_embeddings(X, model)
-    write_entity_embeddings(X_embs, train_path, "subj_embeddings.txt")
     with open(train_path, 'r') as fin:
         all_lines = fin.readlines()
-    print(len(all_lines))
-    start = time.time()
-    p = mp.Pool(8)
+    print("Loading gensim model took {} seconds".format(time.time()-start))
     partial_qa = partial(parallel_qa, model=model, entities=X)
-    results = p.map(partial_qa, all_lines)
-    p.close()
-    p.join()
+    start = time.time()
+    results = map(partial_qa, all_lines[a:b])
+    a = -1
+    b = -1
     print("Execution took {} seconds".format(time.time()-start))
-
     #training_vals = read_qa(train_path, model, X)
-    with open("./to_train.txt", 'w') as fout:
-        for question in results:
-            for ans in question:
-                to_print = ""
-                to_print += str(list(ans[0][1:-1])) + "\t" + str(ans[1]) + "\n"
-                fout.write(to_print)
+    start = time.time()
+    with open(outfile_path, 'w') as fout:
+        for qa in results:
+            q = qa[0]
+            subj = qa[1]
+            a = qa[2]
+            to_print = str(q).replace("\n", "")[1:-1] + "\t" # add question
+            to_print += str(subj).replace("\n", "")[1:-1] + "\t" # add subject's embedding
+            to_print += str(a).replace("\n", "")[1:-1] + "\n" # add answer
+            fout.write(to_print)
+    print("Writing {} took {} seconds".format(outfile_path, time.time()-start))
     return 0
 
 class MetaQADataset(Dataset):
