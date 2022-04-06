@@ -1,10 +1,12 @@
 import logging
+import yaml
+
 import torch
 import torch.nn as nn
-import yaml
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+
 from model import *
 
 def get_logger(file_name=None):
@@ -46,15 +48,25 @@ def make_model(config, kb_info):
     return model, optimizer, criterion
 
 def run(config):
-    """The whole training, validate, test process
+    """The whole training and validate process
     """
     logger = get_logger(config['logger_file_name']) # for logger
     writer = SummaryWriter(config['tensorboard_path']) # for tensorboard
 
+    # check cuda
+    if config['use_cuda']:
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        else:
+            device = torch.device('cpu')
+            logger.warning('Cannot find CUDA, using CPU')
+    else:
+        device = torch.device('cpu')
+
     # prepare saving environment
-    save_path = os.path.join(config['model_save_path'], config['model_name'])
-    if not os.path.exists(save_path):
-        os.mkdirs(save_path)
+    save_dir = os.path.join(config['model_save_path'], config['model_name'])
+    if not os.path.exists(save_dir):
+        os.mkdirs(save_dir)
 
     # read files
     logger.info("Read files and prepare data")
@@ -68,6 +80,7 @@ def run(config):
     # data = read_metaqadata()
     metaqa_dev = MetaQADataset(data)
     dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=128, shuffle=True)
+
     # get M_subj, M_rel, M_obj
     M_subj, M_rel, M_obj = read_KB('')
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
@@ -76,6 +89,7 @@ def run(config):
     # assume we have M_subj, M_rel, M_obj, and dataloaders for train and dev
     logger.info("Set up model, optimizer, and criterion")
     model, optimizer, criterion = make_model(config, [M_subj, M_rel, M_obj])
+    model.to(device)
 
     train_losses = []
     dev_losses = []
@@ -89,13 +103,15 @@ def run(config):
         for batch_idx, data in enumerate(train_dataloader):
             # forward
             inputs, y = data # inputs: x, q, n_hop
+            inputs = [x.to(device) for x in inputs]
+            y = y.to(device)
             if 'kb_multihop' == config['task']:
-                x = model(*inputs)
+                y_hat = model(*inputs)
             else:
                 raise ValueError
 
             # calculation loss
-            loss = criterion(x, y)
+            loss = criterion(y_hat, y)
             loss_value = loss.item()
             train_losses.append(loss_value)
             writer.add_scalar('train loss', loss_value,
@@ -118,8 +134,12 @@ def run(config):
             dev_loss = []
             for batch_idx, data in enumerate(dev_dataloader):
                 inputs, y = data # inputs: x, q, n_hop
-                for i in range(n_hop):
+                inputs = [x.to(device) for x in inputs]
+                y = y.to(device)
+                if 'kb_multihop' == config['task']:
                     y_hat = model(*inputs)
+                else:
+                    raise ValueError
                 loss = criterion(y_hat, y)
                 loss_value = loss.item()
                 dev_loss.append(loss_value)
@@ -135,17 +155,22 @@ def run(config):
                 best_dev_loss = loss_dev_loss_avg
 
                 # save the best model based on the dev/validation set
+                model.cpu()
                 state = {'epoch': ep,
                          'state_dict': model.state_dict(),
                          'optimizer': optimizer.state_dict()}
                 torch.save(state, os.path.join(config['model_save_path'],
                                                config['model_name'],
                                                'best_model')
+                model.to(device)
 
             logger.info("Dev Epoch:[{}]\t loss={:.3f}".format(
                             (ep + 1) / config['DEV_EPOCH'], torch.mean(dev_loss)))
 
+            model.train()
+
     # save the final model
+    model.cpu()
     state = {'epoch': ep,
              'state_dict': model.state_dict(),
              'optimizer': optimizer.state_dict()}
@@ -153,7 +178,7 @@ def run(config):
                                    config['model_name'],
                                    'final_model'))
     # save the losses in text to prevent error from tensorboard
-    save_dir = os.path.join(config['model_save_path'], config['model_name'])
+    #save_dir = os.path.join(config['model_save_path'], config['model_name'])
     with open(os.path.join(save_dir, 'train_loss.txt'), 'w') as f:
         train_losses_str = ' '.join([str(loss) for loss in train_losses])
         f.write(train_losses_str)
@@ -169,3 +194,4 @@ if __name__ == "__main__":
     with open("../config.yml") as f:
         config = yaml.safe_load(f)
     run(config)
+
