@@ -204,23 +204,24 @@ def parse_entities(sentence):
 def read_metaqa(input_dir):
     files = os.listdir(input_dir)
     train_data = []
-    cnt = 0 # for test
+    cnt = 0 # for debugging
     for f in files:
         path = input_dir + "/" + f
         with open(path, 'r') as fin:
             for line in fin:
                 line = line.split('\t')
                 q = line[0].strip()
-                q = torch.tensor([float(x) for x in q.split()])
+                q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
                 subj = line[1].strip()
-                subj = torch.tensor([float(x) for x in subj.split()])
+                subj = torch.tensor([float(x) for x in subj.split()]).unsqueeze(0)
                 a = line[2].strip().split()
                 a = [int(x) for x in a]
                 for ent in a:
-                    instance = [[q, subj], ent - 1] # -1 for training and fit the output vector from NN
+                    instance = [[subj, q], ent - 1] # -1 for training and fit the output vector from NN
                     train_data.append(instance)
+                    # for debugging
                     cnt += 1
-                    if cnt >= 100:
+                    if cnt >= 500:
                         return train_data
     return train_data
 

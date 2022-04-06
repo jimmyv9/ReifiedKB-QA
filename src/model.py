@@ -35,6 +35,7 @@ class RefiedKBQA(nn.Module):
                             where N_E is the number of relations
         """
         # vector x * M_subj^T
+        print(self.M_subj.size(), x.size())
         x_t = torch.sparse.mm(self.M_subj, x.T) # (N_T, batch_size) dense
         #x_t = torch.mm(x, self.M_subj.T)
         # vector r * M_subj^T

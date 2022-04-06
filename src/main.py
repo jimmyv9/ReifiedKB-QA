@@ -50,6 +50,29 @@ def make_model(config, kb_info):
     criterion = nn.CrossEntropyLoss()
     return model, optimizer, criterion
 
+def collate_fn(batch_data):
+    """Gather a batch of data and convert them to proper format
+    Args:
+        batch_data(list): a list of data with length equal to the batch size
+
+    Return:
+        [xs, qs](Tensor, Tensor): two tensors both with size (batch_size, 300)
+        labels(Tensor): a tensor with size (batch_size,)
+    """
+    # [[[x, q], label], [], ...] -> [[x, q], [], ...], [label]
+    batch_data = list(zip(*batch_data))
+    inputs, labels = batch_data
+
+    # [[x, q], [], ...] -> [x], [q]
+    xs, qs = list(zip(*inputs))
+
+    # convert list to tensor
+    xs = torch.cat(xs, dim=0)
+    qs = torch.cat(qs, dim=0)
+    labels = torch.tensor(labels)
+
+    return [xs, qs], labels
+
 def run(config):
     """The whole training and validate process
     """
@@ -86,12 +109,12 @@ def run(config):
     # for train set
     data = read_metaqa(config['emb_path'])
     metaqa_train = MetaQADataset(data)
-    train_dataloader = DataLoader(dataset=metaqa_train, batch_size=128, shuffle=True)
+    train_dataloader = DataLoader(dataset=metaqa_train, batch_size=128, shuffle=True, collate_fn=collate_fn)
 
     # for dev/validation set
     data = read_metaqa(config['emb_path'])
     metaqa_dev = MetaQADataset(data)
-    dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=128, shuffle=True)
+    dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=128, shuffle=True, collate_fn=collate_fn)
 
     # get M_subj, M_rel, M_obj
     M_subj, M_rel, M_obj = read_KB(config['kb_path'])
@@ -117,8 +140,6 @@ def run(config):
     for ep in range(config['MAX_TRAIN_EPOCH']):
         for batch_idx, data in enumerate(train_dataloader):
             # forward
-            print(type(data))
-            print(len(data))
             inputs, y = data # inputs: x, q, n_hop
             inputs = [x.to(device) for x in inputs]
             y = y.to(device)
