@@ -5,7 +5,7 @@ class RefiedKBQA(nn.Module):
     """
     Define the neural model to calculate relation
     """
-    def init(self, N_W2V, N_R, kb_info):
+    def __init__(self, N_W2V, N_R, kb_info):
         """Initialize the model
         Args:
             N_W2V(int): number of dim in word2vec  
@@ -16,6 +16,7 @@ class RefiedKBQA(nn.Module):
                 M_rel(matrix): dim (N_T, N_R)
                 M_obj(matrix): dim (N_T, N_E)
         """
+        super().__init__()
         self.dense1 = nn.Linear(N_W2V, N_R) # for the 1 hop
         self.dense2 = nn.Linear(N_W2V, N_R) # for the 2 hop
         self.dense3 = nn.Linear(N_W2V, N_R) # for the 3 hop
@@ -34,11 +35,14 @@ class RefiedKBQA(nn.Module):
                             where N_E is the number of relations
         """
         # vector x * M_subj^T
-        x_t = torch.dot(x, self.M_subj.T)
+        x_t = torch.sparse.mm(self.M_subj, x.T) # (N_T, batch_size) dense
+        #x_t = torch.mm(x, self.M_subj.T)
         # vector r * M_subj^T
-        r_t = torch.dot(r, self.M_rel.T)
+        r_t = torch.sparse.mm(self.M_rel.T, r.T) # (N_T, batch_size) dense
+        #r_t = torch.mm(r, self.M_rel.T)
         # (x_t * r_t) * M_obj
-        x_new = torch.dot(x_t * r_t, self.M_obj)
+        x_new = torch.sparse.mm(self.M_obj.T, x_t * r_t).T # (batch_size, N_E)
+        #x_new = torch.mm(x_t * r_t, self.M_obj)
         return x_new
 
     def forward(self, x, q, n_hop):
@@ -71,7 +75,7 @@ class RefiedKBQA_KBCompletion(nn.Module):
     """
     Define the neural model to calculate relation
     """
-    def init(self, N_W2V, N_R, kb_info):
+    def __init__(self, N_W2V, N_R, kb_info):
         """Initialize the model
         Args:
             N_W2V(int): number of dim in word2vec  
@@ -82,6 +86,7 @@ class RefiedKBQA_KBCompletion(nn.Module):
                 M_rel(matrix): dim (N_T, N_R)
                 M_obj(matrix): dim (N_T, N_E)
         """
+        super().__init__()
         self.dense1 = nn.Linear(N_W2V, N_R) # for the 1 hop
         self.dense2 = nn.Linear(N_W2V, N_R) # for the 2 hop
         self.dense3 = nn.Linear(N_W2V, N_R) # for the 3 hop
@@ -137,13 +142,14 @@ class LSTM_Encoder(nn.Module):
     """
     Define the encoder for the encoder-decoder model
     """
-    def init(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size):
         """Initialize the model
         Args:
             input_size(int): the dimension of the input vector for each token
                                 which is N_W2V
             hidden_size(int): the dimension of the model hidden state
         """
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size)
@@ -164,13 +170,14 @@ class LSTM_Decoder(nn.Module):
     """
     Define the encoder for the encoder-decoder model
     """
-    def init(self, input_size, hidden_size, N_W2V):
+    def __init__(self, input_size, hidden_size, N_W2V):
         """Initialize the model
         Args:
             input_size(int): the dimension of the input vector for each realtion
                                 which is N_R
             hidden_size(int): the dimension of the model hidden state
         """
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size)
@@ -213,6 +220,7 @@ class RefiedKBQA_LSTM(nn.Module):
                 M_rel(matrix): dim (N_T, N_R)
                 M_obj(matrix): dim (N_T, N_E)
         """
+        super().__init__()
         self.lstm_encoder = nn.LSTM_Encoder(input_size=N_W2V, hidden_size=hidden_size)
         self.lstm_decoder = nn.LSTM_Decoder(intput_size=N_R, hidden_size=hidden_size)
         self.M_subj, self.M_rel, self.M_obj = kb_info # store the kb info

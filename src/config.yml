@@ -3,16 +3,20 @@ MAX_TRAIN_EPOCH: 10 # maximum number of training epoch
 DEV_EPOCH: 2 # how many epoch during training we run a dev set
 N_W2V: 300 # word2vec dimension
 hidden_size: 128 # for LSTM hidden states
-kb_data_path: './MetaQA/kb.txt'
-1_hop_path: './MetaQA/1-hop/vanilla/'
-2_hop_path: './MetaQA/2-hop/vanilla/'
-3_hop_path: './MetaQA/3-hop/vanilla/'
+kb_path: '../data/MetaQA/kb.txt'
+1_hop_path: '../data/MetaQA/1-hop/vanilla/'
+2_hop_path: '../data/MetaQA/2-hop/vanilla/'
+3_hop_path: '../data/MetaQA/3-hop/vanilla/'
 task: 'kb_multihop' # kb_multihop, kb_completion, kb_lstm
-logger_file_name: './log/log01.txt'
-tensorboard_path: './tensorboard_log'
-model_save_path: './models/'
+logger_file_name: '../log/log01.txt'
+tensorboard_path: '../tensorboard_log/'
+model_save_path: '../models/'
 model_name: '001' # build a folder for each model
 use_cuda: True
+
+# for test
+emb_path: '../data/MetaQA/train_metaqa/' # extracted embedding path
+n_hop: 1 # nhop
 
 # for inference
 read_from: 'best_model' # best_model, final_model

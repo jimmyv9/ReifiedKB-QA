@@ -8,6 +8,7 @@ import gensim.downloader as api
 from gensim.models import KeyedVectors
 #import multiprocessing.dummy as mp
 
+import torch
 from torch.utils.data import Dataset
 
 def read_triples(filename):
@@ -200,23 +201,27 @@ def parse_entities(sentence):
             tokens.append(word)
     return tokens, entity
 
-def get_pytorch_input(input_dir, nhop):
+def read_metaqa(input_dir):
     files = os.listdir(input_dir)
     train_data = []
+    cnt = 0 # for test
     for f in files:
         path = input_dir + "/" + f
         with open(path, 'r') as fin:
             for line in fin:
                 line = line.split('\t')
                 q = line[0].strip()
-                q = np.array([float(x) for x in q.split()])
+                q = torch.tensor([float(x) for x in q.split()])
                 subj = line[1].strip()
-                subj = np.array([float(x) for x in subj.split()])
+                subj = torch.tensor([float(x) for x in subj.split()])
                 a = line[2].strip().split()
                 a = [int(x) for x in a]
                 for ent in a:
-                    instance = [[q, subj, nhop], ent]
+                    instance = [[q, subj], ent - 1] # -1 for training and fit the output vector from NN
                     train_data.append(instance)
+                    cnt += 1
+                    if cnt >= 100:
+                        return train_data
     return train_data
 
 
@@ -259,6 +264,48 @@ def main():
     print("Writing {} took {} seconds".format(outfile_path, time.time()-start))
     return 0
 
+def read_KB(file_path):
+    """Read knowledge graph from file and convert to COO matrixes
+    Args:
+        file_path(str): the path of the kb
+
+    Returns:
+        M_subj(COO_Matrix): a sparse matrix with size (# of triples, # of entities)
+        M_rel(COO_Matrix): a sparse matrix with size (# of triples, # of relation)
+        M_obj(COO_Matrix): a sparse matrix with size (# of triples, # of entities)
+    """
+    triples = read_triples(file_path)
+    X = extract_entities(triples)
+    R = {}
+    for triple in triples:
+        r = triple[1]
+        if r not in R:
+            R[r] = len(R)
+
+    subj_idx = []
+    rel_idx = []
+    obj_idx = []
+    for idx, triple in enumerate(triples):
+        s, r, o = triple
+        subj_idx.append([idx, X[s] - 1]) # -1 for training and fit the output vector from NN
+        rel_idx.append([idx, R[r]])
+        obj_idx.append([idx, X[o] - 1]) # -1 for training and fit the output vector from NN
+    subj_data = torch.FloatTensor([1] * len(subj_idx))
+    subj_idx = torch.LongTensor(subj_idx).T
+    subj_size = [len(triples), len(X)]
+    rel_data = torch.FloatTensor([1] * len(rel_idx))
+    rel_idx = torch.LongTensor(rel_idx).T
+    rel_size = [len(triples), len(R)]
+    obj_data = torch.FloatTensor([1] * len(obj_idx))
+    obj_idx = torch.LongTensor(obj_idx).T
+    obj_size = [len(triples), len(X)]
+
+    M_subj = torch.sparse.FloatTensor(subj_idx, subj_data, torch.Size(subj_size))
+    M_rel = torch.sparse.FloatTensor(rel_idx, rel_data, torch.Size(rel_size))
+    M_obj = torch.sparse.FloatTensor(obj_idx, obj_data, torch.Size(obj_size))
+
+    return M_subj, M_rel, M_obj
+
 class MetaQADataset(Dataset):
     """
     Define the dataset for MetaQA
@@ -269,7 +316,7 @@ class MetaQADataset(Dataset):
             data(list): a 2-D list with the structure
                         [[input, label], [], ...]
                         in details:
-                        [[[entity_embedding, question_embedding, n_hop], objective index],
+                        [[[entity_embedding, question_embedding], objective index],
                          [], ...]
         """
         self.data = data
@@ -283,7 +330,7 @@ class MetaQADataset(Dataset):
         Return:
             data(list): one line of data with the structure [intput, label]
                         in details:
-                        [[entity_embedding, question_embedding, n_hop], objective index]
+                        [[entity_embedding, question_embedding], objective index]
         """
         return self.data[index]
 
