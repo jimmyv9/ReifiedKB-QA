@@ -1,5 +1,5 @@
-lr: 1e-4 # learning rate
-MAX_TRAIN_EPOCH: 10 # maximum number of training epoch
+lr: 1e-3 # learning rate
+MAX_TRAIN_EPOCH: 100 # maximum number of training epoch
 DEV_EPOCH: 2 # how many epoch during training we run a dev set
 N_W2V: 300 # word2vec dimension
 hidden_size: 128 # for LSTM hidden states
@@ -20,3 +20,4 @@ n_hop: 1 # nhop
 
 # for inference
 read_from: 'best_model' # best_model, final_model
+inference_logger_file_name: '../log/log01_infer.txt'
