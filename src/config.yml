@@ -20,3 +20,4 @@ n_hop: 1 # nhop
 
 # for inference
 read_from: 'best_model' # best_model, final_model
+inference_logger_file_name: '../log/log01_infer.txt'

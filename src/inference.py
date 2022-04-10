@@ -46,36 +46,79 @@ def make_model(config, kb_info):
     criterion = nn.CrossEntropyLoss()
     return model, optimizer, criterion
 
+def collate_fn(batch_data):
+    """Gather a batch of data and convert them to proper format
+    Args:
+        batch_data(list): a list of data with length equal to the batch size
+
+    Return:
+        [xs, qs](Tensor, Tensor): two tensors both with size (batch_size, 300)
+        labels(Tensor): a tensor with size (batch_size,)
+    """
+    # [[[batch_data], total numbers of entities], [], ...] -> [batch_data], [total numbers of entities]
+    batch_data = list(zip(*batch_data))
+    batch_data, total_number = batch_data
+    total_number = total_number[0]
+
+    # [[[x, q], label], [], ...] -> [[x, q], [], ...], [label]
+    batch_data = list(zip(*batch_data))
+    inputs, labels = batch_data
+
+    # [[x, q], [], ...] -> [x], [q]
+    xs, qs = list(zip(*inputs))
+
+    # convert list to tensor
+    xs = torch.LongTensor(xs)
+    xs = F.one_hot(xs, num_classes=total_number).type(torch.FloatTensor)
+    qs = torch.cat(qs, dim=0)
+    labels = torch.tensor(labels)
+
+    # freeze for training
+    xs.requires_grad = False
+    qs.requires_grad = False
+
+    return [xs, qs], labels
+
 def run(config):
     """The whole test process
     """
-    logger = get_logger(config['logger_file_name']) # for logger
+    # prepare saving environment
+    save_dir = os.path.join(config['model_save_path'], config['model_name'])
+    if not os.path.exists(save_dir):
+        raise ValueError('Wrong model path')
+
+    log_dir = os.path.dirname(config['inference_logger_file_name'])
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    logger = get_logger(config['inference_logger_file_name']) # for logger
 
     # check cuda
     if config['use_cuda']:
         if torch.cuda.is_available():
             device = torch.device('cuda')
+            logger.info('Running on CUDA')
         else:
             device = torch.device('cpu')
             logger.warning('Cannot find CUDA, using CPU')
     else:
         device = torch.device('cpu')
-
-    # prepare saving environment
-    save_dir = os.path.join(config['model_save_path'], config['model_name'])
-    if not os.path.exists(save_dir):
-        os.mkdirs(save_dir)
+        logger.info('Running on CPU')
 
     # read files
     logger.info("Read files and prepare data")
 
-    # data = read_metaqadata()
-    metaqa_test = MetaQADataset(data)
-    test_dataloader = DataLoader(dataset=metaqa_test, batch_size=128, shuffle=False)
-
-        # get M_subj, M_rel, M_obj
-    M_subj, M_rel, M_obj = read_KB('')
+    # read KB, get M_subj, M_rel, M_obj
+    M_subj, M_rel, M_obj = read_KB(config['kb_path'])
+    M_subj = M_subj.to(device)
+    M_rel = M_rel.to(device)
+    M_obj = M_obj.to(device)
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
+
+    # for test set
+    data = read_metaqa(config['emb_path'])
+    metaqa_test = MetaQADataset(data, M_subj.size(-1))
+    test_dataloader = DataLoader(dataset=metaqa_test, batch_size=128, shuffle=False, collate_fn=collate_fn)
 
     # train
     # assume we have M_subj, M_rel, M_obj, and dataloaders for train and dev
@@ -86,9 +129,9 @@ def run(config):
     model.load_state_dict(state['state_dict'])
     model.to(device)
 
-    logger.info("Start testing")
-
     results = []
+
+    logger.info("Start testing")
 
     model.eval()
     for data in test_dataloader():

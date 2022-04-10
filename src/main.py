@@ -114,6 +114,7 @@ def run(config):
             logger.warning('Cannot find CUDA, using CPU')
     else:
         device = torch.device('cpu')
+        logger.info('Running on CPU')
 
     # read files
     logger.info("Read files and prepare data")
