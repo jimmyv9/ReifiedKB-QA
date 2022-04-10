@@ -213,27 +213,22 @@ def main():
     print("Calculating/Writing {} took {} seconds".format(outfile_path, time.time()-start))
     return 0
 
-def read_metaqa(input_dir):
-    files = os.listdir(input_dir)
-    train_data = []
-    cnt = 0 # for debugging
-    for f in files:
-        path = input_dir + "/" + f
-        with open(path, 'r') as fin:
-            for line in fin:
-                line = line.split('\t')
-                subj = line[0].strip()
-                q = line[1].strip()
-                q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
-                a = line[2].strip().split()
-                a = [int(x) for x in a]
-                for ent in a:
-                    instance = [[subj, q], ent]
-                    train_data.append(instance)
-                    # for debugging
-                    cnt += 1
-                    if cnt >= 500:
-                        return train_data
+def read_metaqa(input_file):
+    with open(input_file, 'r') as fin:
+        for line in fin:
+            line = line.split('\t')
+            subj = line[0].strip()
+            q = line[1].strip()
+            q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
+            a = line[2].strip().split()
+            a = [int(x) for x in a]
+            for ent in a:
+                instance = [[subj, q], ent]
+                train_data.append(instance)
+                # for debugging
+                cnt += 1
+                if cnt >= 500:
+                    return train_data
     return train_data
 
 def read_KB(file_path):
