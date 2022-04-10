@@ -34,16 +34,12 @@ class RefiedKBQA(nn.Module):
             x_new(matrix): batched k-hot vector with dim (batch_size, N_E)
                             where N_E is the number of relations
         """
-        # vector x * M_subj^T
-        print(self.M_subj.size(), x.size())
+        # vector x * M_subj^T, swap for sparse mm
         x_t = torch.sparse.mm(self.M_subj, x.T) # (N_T, batch_size) dense
-        #x_t = torch.mm(x, self.M_subj.T)
-        # vector r * M_subj^T
-        r_t = torch.sparse.mm(self.M_rel.T, r.T) # (N_T, batch_size) dense
-        #r_t = torch.mm(r, self.M_rel.T)
-        # (x_t * r_t) * M_obj
-        x_new = torch.sparse.mm(self.M_obj.T, x_t * r_t).T # (batch_size, N_E)
-        #x_new = torch.mm(x_t * r_t, self.M_obj)
+        # vector r * M_subj^T, swap for sparse mm
+        r_t = torch.sparse.mm(self.M_rel, r.T) # (N_T, batch_size) dense
+        # (x_t * r_t) * M_obj, swap for sparse mm
+        x_new = torch.sparse.mm(self.M_obj.t(), x_t * r_t).T # (batch_size, N_E)
         return x_new
 
     def forward(self, x, q, n_hop):
@@ -105,12 +101,12 @@ class RefiedKBQA_KBCompletion(nn.Module):
             x_new(matrix): batched k-hot vector with dim (batch_size, N_E)
                             where N_E is the number of relations
         """
-        # vector x * M_subj^T
-        x_t = torch.dot(x, self.M_subj.T)
-        # vector r * M_subj^T
-        r_t = torch.dot(r, self.M_rel.T)
-        # (x_t * r_t) * M_obj
-        x_new = torch.dot(x_t * r_t, self.M_obj) + x
+        # vector x * M_subj^T, swap for sparse mm
+        x_t = torch.sparse.mm(self.M_subj, x.T) # (N_T, batch_size) dense
+        # vector r * M_subj^T, swap for sparse mm
+        r_t = torch.sparse.mm(self.M_rel, r.T) # (N_T, batch_size) dense
+        # (x_t * r_t) * M_obj, swap for sparse mm
+        x_new = torch.sparse.mm(self.M_obj.t(), x_t * r_t).T # (batch_size, N_E)
         return x_new
 
     def forward(self, x, q, n_hop):
@@ -239,12 +235,12 @@ class RefiedKBQA_LSTM(nn.Module):
             x_new(matrix): batched k-hot vector with dim (batch_size, N_E)
                             where N_E is the number of relations
         """
-        # vector x * M_subj^T
-        x_t = torch.dot(x, self.M_subj.T)
-        # vector r * M_subj^T
-        r_t = torch.dot(r, self.M_rel.T)
-        # (x_t * r_t) * M_obj
-        x_new = torch.dot(x_t * r_t, self.M_obj) + x
+        # vector x * M_subj^T, swap for sparse mm
+        x_t = torch.sparse.mm(self.M_subj, x.T) # (N_T, batch_size) dense
+        # vector r * M_subj^T, swap for sparse mm
+        r_t = torch.sparse.mm(self.M_rel, r.T) # (N_T, batch_size) dense
+        # (x_t * r_t) * M_obj, swap for sparse mm
+        x_new = torch.sparse.mm(self.M_obj.t(), x_t * r_t).T # (batch_size, N_E)
         return x_new
 
     def forward(self, x, tokens, relations, n_hop):

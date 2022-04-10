@@ -1,9 +1,11 @@
 import os
 import yaml
 import logging
+import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -59,6 +61,11 @@ def collate_fn(batch_data):
         [xs, qs](Tensor, Tensor): two tensors both with size (batch_size, 300)
         labels(Tensor): a tensor with size (batch_size,)
     """
+    # [[[batch_data], total numbers of entities], [], ...] -> [batch_data], [total numbers of entities]
+    batch_data = list(zip(*batch_data))
+    batch_data, total_number = batch_data
+    total_number = total_number[0]
+
     # [[[x, q], label], [], ...] -> [[x, q], [], ...], [label]
     batch_data = list(zip(*batch_data))
     inputs, labels = batch_data
@@ -67,7 +74,8 @@ def collate_fn(batch_data):
     xs, qs = list(zip(*inputs))
 
     # convert list to tensor
-    xs = torch.cat(xs, dim=0)
+    xs = torch.LongTensor(xs)
+    xs = F.one_hot(xs, num_classes=total_number).type(torch.FloatTensor)
     qs = torch.cat(qs, dim=0)
     labels = torch.tensor(labels)
 
@@ -106,22 +114,22 @@ def run(config):
     # read files
     logger.info("Read files and prepare data")
 
-    # for train set
-    data = read_metaqa(config['emb_path'])
-    metaqa_train = MetaQADataset(data)
-    train_dataloader = DataLoader(dataset=metaqa_train, batch_size=128, shuffle=True, collate_fn=collate_fn)
-
-    # for dev/validation set
-    data = read_metaqa(config['emb_path'])
-    metaqa_dev = MetaQADataset(data)
-    dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=128, shuffle=True, collate_fn=collate_fn)
-
-    # get M_subj, M_rel, M_obj
+    # read KB, get M_subj, M_rel, M_obj
     M_subj, M_rel, M_obj = read_KB(config['kb_path'])
     M_subj = M_subj.to(device)
     M_rel = M_rel.to(device)
     M_obj = M_obj.to(device)
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
+
+    # for train set
+    data = read_metaqa(config['emb_path'])
+    metaqa_train = MetaQADataset(data, M_subj.size(-1))
+    train_dataloader = DataLoader(dataset=metaqa_train, batch_size=128, shuffle=True, collate_fn=collate_fn)
+
+    # for dev/validation set
+    data = read_metaqa(config['emb_path'])
+    metaqa_dev = MetaQADataset(data, M_subj.size(-1))
+    dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=128, shuffle=True, collate_fn=collate_fn)
 
     # train
     # assume we have M_subj, M_rel, M_obj, and dataloaders for train and dev
@@ -164,9 +172,7 @@ def run(config):
             loss.backward()
             optimizer.step()
         logger.info("Train Epoch:[{}/{}]\t loss={:.3f}".format(
-                        ep + 1, config['MAX_TRAIN_EPOCH'], torch.mean(train_losses)))
-
-        input() # for debug
+                        ep + 1, config['MAX_TRAIN_EPOCH'], np.mean(train_losses)))
 
         # validation/development set
         if (ep + 1) % config['DEV_EPOCH'] == 0:
@@ -187,12 +193,12 @@ def run(config):
                                     (((ep + 1) / config['DEV_EPOCH'] - 1) *
                                     len(dev_dataloader) + batch_idx))
 
-            dev_loss_avg = torch.mean(dev_loss)
+            dev_loss_avg = np.mean(dev_loss)
             writer.add_scalar('dev loss', dev_loss_avg, (ep + 1) / config['DEV_EPOCH'])
             dev_losses.append(dev_loss_avg)
             # for statistics
             if dev_loss_avg < best_dev_loss:
-                best_dev_loss = loss_dev_loss_avg
+                best_dev_loss = dev_loss_avg
 
                 # save the best model based on the dev/validation set
                 model.cpu()
@@ -205,7 +211,7 @@ def run(config):
                 model.to(device)
 
             logger.info("Dev Epoch:[{}]\t loss={:.3f}".format(
-                            (ep + 1) / config['DEV_EPOCH'], torch.mean(dev_loss)))
+                            (ep + 1) // config['DEV_EPOCH'], np.mean(dev_loss)))
 
             model.train()
 

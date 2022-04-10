@@ -3,6 +3,7 @@ import os
 import string
 import numpy as np
 import time
+import random
 from functools import partial
 import gensim.downloader as api
 from gensim.models import KeyedVectors
@@ -212,8 +213,10 @@ def read_metaqa(input_dir):
                 line = line.split('\t')
                 q = line[0].strip()
                 q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
-                subj = line[1].strip()
-                subj = torch.tensor([float(x) for x in subj.split()]).unsqueeze(0)
+                # dummy subj id for debugging
+                subj = random.randint(0, 4000)
+                #subj = line[1].strip()
+                #subj = torch.tensor([float(x) for x in subj.split()]).unsqueeze(0)
                 a = line[2].strip().split()
                 a = [int(x) for x in a]
                 for ent in a:
@@ -311,7 +314,7 @@ class MetaQADataset(Dataset):
     """
     Define the dataset for MetaQA
     """
-    def __init__(self, data):
+    def __init__(self, data, no_of_entities):
         """Initialize the dataset
         Args:
             data(list): a 2-D list with the structure
@@ -319,9 +322,11 @@ class MetaQADataset(Dataset):
                         in details:
                         [[[entity_embedding, question_embedding], objective index],
                          [], ...]
+            no_of_entities(int): the total number of entities in KB
         """
         self.data = data
         self.length = len(data)
+        self.no_of_entities = no_of_entities
 
     def __getitem__(self, index):
         """Get data based on the index from 1 to the length of the data
@@ -333,7 +338,7 @@ class MetaQADataset(Dataset):
                         in details:
                         [[entity_embedding, question_embedding], objective index]
         """
-        return self.data[index]
+        return self.data[index], self.no_of_entities
 
     def __len__(self):
         """Get the number of questions in MetaQA
