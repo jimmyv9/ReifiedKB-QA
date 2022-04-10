@@ -118,7 +118,7 @@ def parallel_qa(query, model, entities):
     except:
         print("Question {} could not be parsed".format(question))
     # Get answer as mapped entities
-    answer.replace(",","").replace("!", "")
+    answer = answer.replace(",","").replace("!", "")
     all_answers = answer.strip().split('|')
     ans_ids = []
     for ans in all_answers:
@@ -132,48 +132,16 @@ def get_emb_from_model(word, model):
     elif word.lower() in model.key_to_index:
         return model[word.lower()]
     else:
-        return model["UNK"]
-
-def read_qa(filename, model, entities):
-    """
-    Extracts question answer as question answer pairs, where question is
-    represented as an embedding and answers are represented by their entity
-    index
-
-    Input:
-        filename: path to test_qa text files
-        model: loaded pre-trained model with embeddings
-
-    Output:
-        QA: ([q_emb],x_i), where q_emb is the embedding of words in question i
-        and x_i is the entity index for the respective question
-    """
-
-    with open(filename, 'r') as fin:
-        testing_instances = []
-        for line in fin:
-            question, answer = line.split("\t")
-            all_words = parse_entities(question)
-            # Get question embeddings
-            embeddings = []
-            for word in all_words:
-                if word in model.key_to_index:
-                    embeddings.append(model[word])
-                elif word.lower() in model.key_to_index:
-                    embeddings.append(model[word.lower()])
-                else:
-                    embeddings.append(model["UNK"])
-            embeddings = np.array(embeddings)
-            print("Tokens: {} yield embedding of length {}".format(all_words, embeddings.shape))
-            try:
-                q = np.mean(embeddings, axis=0) # mean pooling
-            except:
-                print("Question {} could not be parsed".format(question))
-            # Get answer as mapped entities
-            all_answers = answer.strip().split('|')
-            for ans in all_answers:
-                testing_instances.append((q, entities[ans]))
-    return testing_instances
+        final_emb = np.zeros(len(model["UNK"]))
+        # Check if individual words exist in model
+        for w in word.split("_"):
+            if w in model.key_to_index:
+                final_emb += model[w]
+            elif w.lower() in model.key_to_index:
+                final_emb += model[w.lower()]
+            else:
+                return model["UNK"]
+        return final_emb
 
 def parse_entities(sentence):
     """
@@ -225,9 +193,7 @@ def main():
     results = map(partial_qa, all_lines[a:b])
     a = -1
     b = -1
-    print("Execution took {} seconds".format(time.time()-start))
     #training_vals = read_qa(train_path, model, X)
-    start = time.time()
     with open(outfile_path, 'w') as fout:
         for qa in results:
             q = qa[0]
@@ -237,7 +203,7 @@ def main():
             to_print += str(subj).replace("\n", "")[1:-1] + "\t" # add subject's embedding
             to_print += str(a).replace("\n", "")[1:-1] + "\n" # add answer
             fout.write(to_print)
-    print("Writing {} took {} seconds".format(outfile_path, time.time()-start))
+    print("Calculating/Writing {} took {} seconds".format(outfile_path, time.time()-start))
     return 0
 
 def read_KB(file_path):
