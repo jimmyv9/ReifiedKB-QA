@@ -308,6 +308,11 @@ def read_KB(file_path):
     M_rel = torch.sparse.FloatTensor(rel_idx, rel_data, torch.Size(rel_size))
     M_obj = torch.sparse.FloatTensor(obj_idx, obj_data, torch.Size(obj_size))
 
+    # freeze matrix for training
+    M_subj.requires_grad = False
+    M_rel.requires_grad = False
+    M_obj.requires_grad = False
+
     return M_subj, M_rel, M_obj
 
 class MetaQADataset(Dataset):

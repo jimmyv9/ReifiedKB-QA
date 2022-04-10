@@ -79,6 +79,10 @@ def collate_fn(batch_data):
     qs = torch.cat(qs, dim=0)
     labels = torch.tensor(labels)
 
+    # freeze for training
+    xs.requires_grad = False
+    qs.requires_grad = False
+
     return [xs, qs], labels
 
 def run(config):
