@@ -49,7 +49,7 @@ def extract_entities(triples):
         entities.add(t[0])
         entities.add(t[2])
     X = dict()
-    i = 1
+    i = 0
     for e in entities:
         X[e] = i
         i += 1
@@ -64,9 +64,9 @@ def extract_entity_embeddings(entities, model):
     for ent in entities:
         ent = ent.split()
         ent = "_".join(ent)
-        if ent in model.index_to_key:
+        if ent in model.key_to_index:
             entity_embs[ent] = model[word]
-        elif ent.lower() in model.index_to_key:
+        elif ent.lower() in model.key_to_index:
             entity_embs[ent] = model[word.lower()]
         else:
             entity_embs[ent] = model["UNK"]
@@ -127,9 +127,9 @@ def parallel_qa(query, model, entities):
     return (q, subj_emb, ans_ids)
 
 def get_emb_from_model(word, model):
-    if word in model.index_to_key:
+    if word in model.key_to_index:
         return model[word]
-    elif word.lower() in model.index_to_key:
+    elif word.lower() in model.key_to_index:
         return model[word.lower()]
     else:
         return model["UNK"]
@@ -157,9 +157,9 @@ def read_qa(filename, model, entities):
             # Get question embeddings
             embeddings = []
             for word in all_words:
-                if word in model.index_to_key:
+                if word in model.key_to_index:
                     embeddings.append(model[word])
-                elif word.lower() in model.index_to_key:
+                elif word.lower() in model.key_to_index:
                     embeddings.append(model[word.lower()])
                 else:
                     embeddings.append(model["UNK"])
@@ -212,8 +212,7 @@ def read_metaqa(input_dir):
                 line = line.split('\t')
                 q = line[0].strip()
                 q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
-                subj = line[1].strip()
-                subj = torch.tensor([float(x) for x in subj.split()]).unsqueeze(0)
+                subj = int(line[1].strip())
                 a = line[2].strip().split()
                 a = [int(x) for x in a]
                 for ent in a:
