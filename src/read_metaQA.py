@@ -176,15 +176,15 @@ def parse_entities(sentence):
 
 
 def main():
-    if len(sys.argv) != 7:
-        print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings outfile a b`")
+    if len(sys.argv) != 5:
+        print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings outfile")
         sys.exit(-1)
     kb_path = sys.argv[1]
     train_path = sys.argv[2]
     emb_path = sys.argv[3]
     outfile_path = sys.argv[4]
-    a = int(sys.argv[5])
-    b = int(sys.argv[6])
+    #a = int(sys.argv[5])
+    #b = int(sys.argv[6])
 
     triples = read_triples(kb_path)
     X = extract_entities(triples)
@@ -196,11 +196,13 @@ def main():
     print("Loading gensim model took {} seconds".format(time.time()-start))
     partial_qa = partial(parallel_qa, model=model, entities=X)
     start = time.time()
-    results = map(partial_qa, all_lines[a:b])
-    a = -1
-    b = -1
+    results = map(partial_qa, all_lines)
+    file_size = 0
     with open(outfile_path, 'w') as fout:
         for qa in results:
+            file_size += 1
+            if file_size % 1000 == 0:
+                print("Processed {} questions".format(file_size))
             subj = qa[0]
             q = qa[1]
             a = qa[2]
