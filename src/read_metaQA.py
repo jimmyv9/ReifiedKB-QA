@@ -124,7 +124,11 @@ def parallel_qa(query, model, entities):
     for ans in all_answers:
         ans_ids.append(entities[ans])
     ans_ids = np.array(ans_ids)
-    return (q, subj_emb, ans_ids)
+    question = question.replace("!", "").replace(",", "")
+    new_subj = question.split("[")[1]
+    new_subj = new_subj.split("]")[0]
+
+    return (entities[new_subj], q, ans_ids)
 
 def get_emb_from_model(word, model):
     if word in model.key_to_index:
@@ -169,6 +173,8 @@ def parse_entities(sentence):
             tokens.append(word)
     return tokens, entity
 
+
+
 def main():
     if len(sys.argv) != 7:
         print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings outfile a b`")
@@ -193,18 +199,40 @@ def main():
     results = map(partial_qa, all_lines[a:b])
     a = -1
     b = -1
-    #training_vals = read_qa(train_path, model, X)
     with open(outfile_path, 'w') as fout:
         for qa in results:
-            q = qa[0]
-            subj = qa[1]
+            subj = qa[0]
+            q = qa[1]
             a = qa[2]
-            to_print = str(q).replace("\n", "")[1:-1] + "\t" # add question
-            to_print += str(subj).replace("\n", "")[1:-1] + "\t" # add subject's embedding
+            to_print = str(subj) + "\t" # add subject's embedding
+            to_print += str(q).replace("\n", "")[1:-1] + "\t" # add question
             to_print += str(a).replace("\n", "")[1:-1] + "\n" # add answer
             fout.write(to_print)
     print("Calculating/Writing {} took {} seconds".format(outfile_path, time.time()-start))
     return 0
+
+def read_metaqa(input_dir):
+    files = os.listdir(input_dir)
+    train_data = []
+    cnt = 0 # for debugging
+    for f in files:
+        path = input_dir + "/" + f
+        with open(path, 'r') as fin:
+            for line in fin:
+                line = line.split('\t')
+                subj = line[0].strip()
+                q = line[1].strip()
+                q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
+                a = line[2].strip().split()
+                a = [int(x) for x in a]
+                for ent in a:
+                    instance = [[subj, q], ent]
+                    train_data.append(instance)
+                    # for debugging
+                    cnt += 1
+                    if cnt >= 500:
+                        return train_data
+    return train_data
 
 def read_KB(file_path):
     """Read knowledge graph from file and convert to COO matrixes
