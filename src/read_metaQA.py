@@ -217,7 +217,7 @@ def read_metaqa(input_file):
     train_data = []
     with open(input_file, 'r') as fin:
         # for debugging
-        cnt = 0
+        #cnt = 0
         for line in fin:
             line = line.split('\t')
             subj = int(line[0].strip())
@@ -228,12 +228,12 @@ def read_metaqa(input_file):
             instance = [[subj, q], a] # refer to page 6, paragraph 3, 2nd sentence
             train_data.append(instance)
             # for debugging
-            cnt += 1
-            if cnt >= 2000:
-                return train_data
+            #cnt += 1
+            #if cnt >= 5000:
+            #    return train_data
     return train_data
 
-def read_KB(file_path):
+def read_KB(config):
     """Read knowledge graph from file and convert to COO matrixes
     Args:
         file_path(str): the path of the kb
@@ -243,14 +243,25 @@ def read_KB(file_path):
         M_rel(COO_Matrix): a sparse matrix with size (# of triples, # of relation)
         M_obj(COO_Matrix): a sparse matrix with size (# of triples, # of entities)
     """
-    triples = read_triples(file_path)
-    X = extract_entities(triples)
-    R = {}
-    for triple in triples:
-        r = triple[1]
-        if r not in R:
-            R[r] = len(R)
+    with open(config['entity_path'], 'r') as f:
+        X = {}
+        for line in f.readlines():
+            entity, idx = line.split('\t')
+            idx = int(idx)
+            X[entity] = idx
+        X_rev = [''] * len(X)
+        for k, v in X.items():
+            X_rev[v] = k
 
+    with open(config['relation_path'], 'r') as f:
+        R = {}
+        for line in f.readlines():
+            relation, idx = line.split('\t')
+            idx = int(idx)
+            R[relation] = idx
+
+    triples = read_triples(config['kb_path'])
+    total_triples = len(triples)
     subj_idx = []
     rel_idx = []
     obj_idx = []
@@ -259,21 +270,27 @@ def read_KB(file_path):
         subj_idx.append([idx, X[s]])
         rel_idx.append([idx, R[r]])
         obj_idx.append([idx, X[o]])
+        # add a reverse edge
+        r_rev = '_'.join([r, 'rev'])
+        subj_idx.append([idx + total_triples, X[o]])
+        rel_idx.append([idx + total_triples, R[r_rev]])
+        obj_idx.append([idx + total_triples, X[s]])
     subj_data = torch.FloatTensor([1] * len(subj_idx))
     subj_idx = torch.LongTensor(subj_idx).T
-    subj_size = [len(triples), len(X)]
+    subj_size = [len(triples) * 2, len(X)] # add reverse edges
     rel_data = torch.FloatTensor([1] * len(rel_idx))
     rel_idx = torch.LongTensor(rel_idx).T
-    rel_size = [len(triples), len(R)]
+    rel_size = [len(triples) * 2, len(R)] # add reverse edges
     obj_data = torch.FloatTensor([1] * len(obj_idx))
     obj_idx = torch.LongTensor(obj_idx).T
-    obj_size = [len(triples), len(X)]
+    obj_size = [len(triples) * 2, len(X)] # add reverse edges
 
     M_subj = torch.sparse.FloatTensor(subj_idx, subj_data, torch.Size(subj_size))
     M_rel = torch.sparse.FloatTensor(rel_idx, rel_data, torch.Size(rel_size))
     M_obj = torch.sparse.FloatTensor(obj_idx, obj_data, torch.Size(obj_size))
 
-    return M_subj, M_rel, M_obj
+    #return M_subj, M_rel, M_obj
+    return M_subj, M_rel, M_obj, X_rev # for debugging
 
 class MetaQADataset(Dataset):
     """
