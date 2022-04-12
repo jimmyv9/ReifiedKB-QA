@@ -4,3 +4,5 @@ log/
 tensorboard_log/
 models/
 nohup.out
+*.swp
+.nfs*

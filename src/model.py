@@ -68,7 +68,8 @@ class RefiedKBQA(nn.Module):
             r = self.dense3(q)
             x = self._one_step(x, r)
 
-        return x
+        #return x
+        return x, r # for debugging
 
 class WeightedSoftmaxCrossEntropyLoss(nn.Module):
     def __init__(self):
