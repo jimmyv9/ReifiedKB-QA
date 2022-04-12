@@ -5,11 +5,12 @@ class RefiedKBQA(nn.Module):
     """
     Define the neural model to calculate relation
     """
-    def __init__(self, N_W2V, N_R, kb_info):
+    def __init__(self, N_W2V, N_R, n_hop, kb_info):
         """Initialize the model
         Args:
             N_W2V(int): number of dim in word2vec  
             N_R(int): number of relations
+            n_hop(int): number of hops the model runs
             kb_info: M_subj, M_rel, M_obj matrixes where
                 M_subj(matrix): dim (N_T, N_E) where N_T is the number of
                                  triples in the KB
@@ -21,6 +22,7 @@ class RefiedKBQA(nn.Module):
         self.dense2 = nn.Linear(N_W2V, N_R) # for the 2 hop
         self.dense3 = nn.Linear(N_W2V, N_R) # for the 3 hop
         self.M_subj, self.M_rel, self.M_obj = kb_info # store the kb info
+        self.n_hop = n_hop # n_hop for this model
 
     def _one_step(self, x, r):
         """One step follow
@@ -42,7 +44,7 @@ class RefiedKBQA(nn.Module):
         x_new = torch.sparse.mm(self.M_obj.t(), x_t * r_t).T # (batch_size, N_E)
         return x_new
 
-    def forward(self, x, q, n_hop):
+    def forward(self, x, q):
         """Forward process
         Args:
             x(matrix): batched k-hot vector with dim (batch_size, N_E)
@@ -56,17 +58,27 @@ class RefiedKBQA(nn.Module):
         """
         # calculate r for each hop
         # r = q^T w
-        if 1 <= n_hop:
+        if 1 <= self.n_hop:
             r = self.dense1(q)
             x = self._one_step(x, r)
-        if 2 <= n_hop:
+        if 2 <= self.n_hop:
             r = self.dense2(q)
             x = self._one_step(x, r)
-        if 3 <= n_hop:
+        if 3 <= self.n_hop:
             r = self.dense3(q)
             x = self._one_step(x, r)
 
         return x
+
+class WeightedSoftmaxCrossEntropyLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.logsoftmax = nn.LogSoftmax(dim=-1)
+
+    def forward(self, y_hat, y):
+        y_hat = self.logsoftmax(y_hat)
+        loss = -torch.sum(y_hat * y) / len(y)
+        return loss
 
 class RefiedKBQA_KBCompletion(nn.Module):
     """

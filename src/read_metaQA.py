@@ -214,21 +214,23 @@ def main():
     return 0
 
 def read_metaqa(input_file):
+    train_data = []
     with open(input_file, 'r') as fin:
+        # for debugging
+        cnt = 0
         for line in fin:
             line = line.split('\t')
-            subj = line[0].strip()
+            subj = int(line[0].strip())
             q = line[1].strip()
             q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
             a = line[2].strip().split()
             a = [int(x) for x in a]
-            for ent in a:
-                instance = [[subj, q], ent]
-                train_data.append(instance)
-                # for debugging
-                cnt += 1
-                if cnt >= 500:
-                    return train_data
+            instance = [[subj, q], a] # refer to page 6, paragraph 3, 2nd sentence
+            train_data.append(instance)
+            # for debugging
+            cnt += 1
+            if cnt >= 2000:
+                return train_data
     return train_data
 
 def read_KB(file_path):
@@ -254,9 +256,9 @@ def read_KB(file_path):
     obj_idx = []
     for idx, triple in enumerate(triples):
         s, r, o = triple
-        subj_idx.append([idx, X[s] - 1]) # -1 for training and fit the output vector from NN
+        subj_idx.append([idx, X[s]])
         rel_idx.append([idx, R[r]])
-        obj_idx.append([idx, X[o] - 1]) # -1 for training and fit the output vector from NN
+        obj_idx.append([idx, X[o]])
     subj_data = torch.FloatTensor([1] * len(subj_idx))
     subj_idx = torch.LongTensor(subj_idx).T
     subj_size = [len(triples), len(X)]
@@ -277,7 +279,7 @@ class MetaQADataset(Dataset):
     """
     Define the dataset for MetaQA
     """
-    def __init__(self, data):
+    def __init__(self, data, no_of_entities):
         """Initialize the dataset
         Args:
             data(list): a 2-D list with the structure
@@ -285,9 +287,11 @@ class MetaQADataset(Dataset):
                         in details:
                         [[[entity_embedding, question_embedding], objective index],
                          [], ...]
+            no_of_entities(int): the total number of entities in KB
         """
         self.data = data
         self.length = len(data)
+        self.no_of_entities = no_of_entities
 
     def __getitem__(self, index):
         """Get data based on the index from 1 to the length of the data
@@ -295,11 +299,14 @@ class MetaQADataset(Dataset):
             index(int): the index number
 
         Return:
-            data(list): one line of data with the structure [intput, label]
+            data(list): one line of data with the structure
+                        [intput, label], total_number_of_entities
                         in details:
-                        [[entity_embedding, question_embedding], objective index]
+                        [[entity_embedding, question_embedding],
+                         objective index],
+                        total_number_of_entities
         """
-        return self.data[index]
+        return self.data[index], self.no_of_entities
 
     def __len__(self):
         """Get the number of questions in MetaQA

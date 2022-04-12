@@ -87,10 +87,11 @@ def run(config):
     if not os.path.exists(save_dir):
         raise ValueError('Wrong model path')
 
-    log_dir = os.path.dirname(config['inference_logger_file_name'])
+    log_dir = config['inference_logger_file_name']
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
+    log_file_name = 'log_{}_infer.txt'.format(config['model_name'])
     logger = get_logger(config['inference_logger_file_name']) # for logger
 
     # check cuda

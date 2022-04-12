@@ -3,3 +3,4 @@ __pycache__/
 log/
 tensorboard_log/
 models/
+nohup.out

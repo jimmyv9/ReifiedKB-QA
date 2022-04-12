@@ -1,23 +1,29 @@
-lr: 1e-3 # learning rate
+lr: '1e-2' # learning rate
 MAX_TRAIN_EPOCH: 100 # maximum number of training epoch
-DEV_EPOCH: 2 # how many epoch during training we run a dev set
+DEV_EPOCH: 10 # how many epoch during training we run a dev set
+batch_size: 512 # batch size
 N_W2V: 300 # word2vec dimension
 hidden_size: 128 # for LSTM hidden states
+task: 'kb_multihop' # kb_multihop, kb_completion, kb_lstm
+n_hop: 1 # n hop
+use_cuda: True
+gpus: '3' #'0,1,2,3' # gpu ids to train the model
+
+# MetaQA setting
 kb_path: '../data/MetaQA/kb.txt'
 1_hop_path: '../data/MetaQA/1-hop/vanilla/'
 2_hop_path: '../data/MetaQA/2-hop/vanilla/'
 3_hop_path: '../data/MetaQA/3-hop/vanilla/'
-task: 'kb_multihop' # kb_multihop, kb_completion, kb_lstm
-logger_file_name: '../log/log01.txt'
+
+# log setting
+logger_dir: '../log/' # log directory
 tensorboard_path: '../tensorboard_log/'
 model_save_path: '../models/'
-model_name: '001' # build a folder for each model
-use_cuda: True
+model_name: '002' # build a folder for each model
 
-# for test
-emb_path: '../data/MetaQA/train_metaqa/' # extracted embedding path
-n_hop: 1 # nhop
+# for debug
+emb_path: '../data/MetaQA/to_train_all.txt' # extracted embedding path
+
 
 # for inference
 read_from: 'best_model' # best_model, final_model
-inference_logger_file_name: '../log/log01_infer.txt'

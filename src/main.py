@@ -46,10 +46,11 @@ def make_model(config, kb_info):
             M_obj(matrix): dim (N_T, N_E)
     """
     if 'kb_multihop' == config['task']:
-        model = RefiedKBQA(config['N_W2V'], config['N_R'], kb_info)
+        model = RefiedKBQA(config['N_W2V'], config['N_R'], config['n_hop'], kb_info)
     config['lr'] = float(config['lr'])
     optimizer = optim.AdamW(model.parameters(), lr=config['lr'])
-    criterion = nn.CrossEntropyLoss()
+    #criterion = nn.CrossEntropyLoss()
+    criterion = WeightedSoftmaxCrossEntropyLoss()
     return model, optimizer, criterion
 
 def collate_fn(batch_data):
@@ -77,11 +78,18 @@ def collate_fn(batch_data):
     xs = torch.LongTensor(xs)
     xs = F.one_hot(xs, num_classes=total_number).type(torch.FloatTensor)
     qs = torch.cat(qs, dim=0)
-    labels = torch.tensor(labels)
+
+    # convert list of label to uniform distribution on labels
+    label_tensor = torch.zeros_like(xs, dtype=torch.float)
+    for idx, label in enumerate(labels):
+        label = torch.tensor(label)
+        label_tensor[idx,:].index_fill_(0, label, 1 / (len(label)))
+    labels = label_tensor
 
     # freeze for training
     xs.requires_grad = False
     qs.requires_grad = False
+    labels.requires_grad = False
 
     return [xs, qs], labels
 
@@ -93,7 +101,7 @@ def run(config):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    log_dir = os.path.dirname(config['logger_file_name'])
+    log_dir = config['logger_dir']
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -101,14 +109,19 @@ def run(config):
     if not os.path.exists(tensorboard_dir):
         os.makedirs(tensorboard_dir)
 
-    logger = get_logger(config['logger_file_name']) # for logger
+    log_file_name = 'log_{}.txt'.format(config['model_name'])
+    logger = get_logger(os.path.join(config['logger_dir'], log_file_name)) # for logger
     writer = SummaryWriter(config['tensorboard_path']) # for tensorboard
 
     # check cuda
+    gpus = []
     if config['use_cuda']:
         if torch.cuda.is_available():
-            device = torch.device('cuda:3')
-            logger.info('Running on CUDA')
+            # get gpu ids
+            gpus = [int(gpu) for gpu in config['gpus'].split(',')]
+            if 1 == len(gpus):
+                device = torch.device('cuda:{}'.format(gpus[0]))
+            logger.info('Running on CUDA {}'.format(config['gpus']))
         else:
             device = torch.device('cpu')
             logger.warning('Cannot find CUDA, using CPU')
@@ -116,31 +129,41 @@ def run(config):
         device = torch.device('cpu')
         logger.info('Running on CPU')
 
+
     # read files
     logger.info("Read files and prepare data")
 
     # read KB, get M_subj, M_rel, M_obj
     M_subj, M_rel, M_obj = read_KB(config['kb_path'])
-    M_subj = M_subj.to(device)
-    M_rel = M_rel.to(device)
-    M_obj = M_obj.to(device)
+    if 1 >= len(gpus):
+        M_subj = M_subj.to(device)
+        M_rel = M_rel.to(device)
+        M_obj = M_obj.to(device)
+    else:
+        M_subj = M_subj.cuda()
+        M_rel = M_rel.cuda()
+        M_obj = M_obj.cuda()
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
 
     # for train set
     data = read_metaqa(config['emb_path'])
     metaqa_train = MetaQADataset(data, M_subj.size(-1))
-    train_dataloader = DataLoader(dataset=metaqa_train, batch_size=128, shuffle=True, collate_fn=collate_fn)
+    train_dataloader = DataLoader(dataset=metaqa_train, batch_size=config['batch_size'], shuffle=True, collate_fn=collate_fn)
 
     # for dev/validation set
     data = read_metaqa(config['emb_path'])
     metaqa_dev = MetaQADataset(data, M_subj.size(-1))
-    dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=128, shuffle=True, collate_fn=collate_fn)
+    dev_dataloader = DataLoader(dataset=metaqa_dev, batch_size=config['batch_size'], shuffle=True, collate_fn=collate_fn)
 
     # train
     # assume we have M_subj, M_rel, M_obj, and dataloaders for train and dev
     logger.info("Set up model, optimizer, and criterion")
     model, optimizer, criterion = make_model(config, [M_subj, M_rel, M_obj])
-    model.to(device)
+    if 1 >= len(gpus):
+        model.to(device)
+    else:
+        model = nn.DataParallel(model, device_ids=gpus)
+        model = model.cuda()
 
     train_losses = []
     dev_losses = []
@@ -153,11 +176,15 @@ def run(config):
     for ep in range(config['MAX_TRAIN_EPOCH']):
         for batch_idx, data in enumerate(train_dataloader):
             # forward
-            inputs, y = data # inputs: x, q, n_hop
-            inputs = [x.to(device) for x in inputs]
-            y = y.to(device)
+            inputs, y = data # inputs: x, q
+            if 1 >= len(gpus):
+                inputs = [x.to(device) for x in inputs]
+                y = y.to(device)
+            else:
+                inputs = [x.cuda() for x in inputs]
+                y = y.cuda()
             if 'kb_multihop' == config['task']:
-                y_hat = model(*inputs, config['n_hop'])
+                y_hat = model(*inputs)
             else:
                 raise ValueError
 
@@ -188,7 +215,7 @@ def run(config):
                 inputs = [x.to(device) for x in inputs]
                 y = y.to(device)
                 if 'kb_multihop' == config['task']:
-                    y_hat = model(*inputs, config['n_hop'])
+                    y_hat = model(*inputs)
                 else:
                     raise ValueError
                 loss = criterion(y_hat, y)
@@ -206,14 +233,22 @@ def run(config):
                 best_dev_loss = dev_loss_avg
 
                 # save the best model based on the dev/validation set
-                model.cpu()
-                state = {'epoch': ep,
-                         'state_dict': model.state_dict(),
-                         'optimizer': optimizer.state_dict()}
-                torch.save(state, os.path.join(config['model_save_path'],
-                                               config['model_name'],
-                                               'best_model'))
-                model.to(device)
+                if 1 >= len(gpus):
+                    model.cpu()
+                    state = {'epoch': ep,
+                             'state_dict': model.state_dict(),
+                             'optimizer': optimizer.state_dict()}
+                    torch.save(state, os.path.join(config['model_save_path'],
+                                                   config['model_name'],
+                                                   'best_model'))
+                    model.to(device)
+                else:
+                    state = {'epoch': ep,
+                             'state_dict': model.module.state_dict(),
+                             'optimizer': optimizer.state_dict()}
+                    torch.save(state, os.path.join(config['model_save_path'],
+                                                   config['model_name'],
+                                                   'best_model'))
 
             logger.info("Dev Epoch:[{}]\t loss={:.3f}".format(
                             (ep + 1) // config['DEV_EPOCH'], np.mean(dev_loss)))
@@ -221,13 +256,19 @@ def run(config):
             model.train()
 
     # save the final model
-    model.cpu()
-    state = {'epoch': ep,
-             'state_dict': model.state_dict(),
-             'optimizer': optimizer.state_dict()}
+    if 1 >= len(gpus):
+        model.cpu()
+        state = {'epoch': ep,
+                 'state_dict': model.state_dict(),
+                 'optimizer': optimizer.state_dict()}
+    else:
+        state = {'epoch': ep,
+                 'state_dict': model.module.state_dict(),
+                 'optimizer': optimizer.state_dict()}
     torch.save(state, os.path.join(config['model_save_path'],
                                    config['model_name'],
                                    'final_model'))
+
     # save the losses in text to prevent error from tensorboard
     #save_dir = os.path.join(config['model_save_path'], config['model_name'])
     with open(os.path.join(save_dir, 'train_loss.txt'), 'w') as f:
