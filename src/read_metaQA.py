@@ -188,7 +188,20 @@ def main():
 
     triples = read_triples(kb_path)
     X = extract_entities(triples)
-    R = {t[1] for t in triples} # extract relations
+    with open("entity_ids.txt", 'w') as fout:
+        for ent in X:
+            fout.write("{}\t{}\n".format(ent, X[ent]))
+    R = {}
+    for triple in triples:
+        r = triple[1]
+        if r not in R:
+            R[r] = len(R)
+            r_rev = "_".join([r, "rev"])
+            R[r_rev] = len(R)
+
+    with open("relation_ids.txt", 'w') as fout:
+        for rel in R:
+            fout.write("{}\t{}\n".format(rel, R[rel]))
     start = time.time()
     model = api.load(emb_path)
     with open(train_path, 'r') as fin:
