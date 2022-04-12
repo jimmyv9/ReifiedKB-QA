@@ -182,6 +182,7 @@ def run(config):
     
     model.train()
     for ep in range(config['MAX_TRAIN_EPOCH']):
+        train_results = []
         for batch_idx, data in enumerate(train_dataloader):
             # forward
             inputs, y = data # inputs: x, q
@@ -205,7 +206,15 @@ def run(config):
             writer.add_scalar('train loss', loss_value,
                                 ep * len(train_dataloader) + batch_idx)
 
-            # for statistics
+            with torch.no_grad():
+                y_hat = torch.argmax(y_hat, dim=-1).tolist()
+                for y_pred, y_true in zip(y_hat, y):
+                    if 0 < y_true[y_pred].item():
+                        train_results.append(1)
+                    else:
+                        train_results.append(0)
+
+             # for statistics
             if loss_value < best_train_loss:
                 best_train_loss = loss_value
 
@@ -213,13 +222,17 @@ def run(config):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        logger.info("Train Epoch:[{}/{}]\t loss={:.3f}".format(
-                        ep + 1, config['MAX_TRAIN_EPOCH'], np.mean(train_losses)))
+        logger.info("Train Epoch:[{}/{}]\tloss={:.3f}\tacurracy={:.3f}".format(
+                        ep + 1,
+                        config['MAX_TRAIN_EPOCH'],
+                        np.mean(train_losses),
+                        np.mean(train_results)))
 
         # validation/development set
         if (ep + 1) % config['DEV_EPOCH'] == 0:
             model.eval()
             dev_loss = []
+            dev_results = []
             for batch_idx, data in enumerate(dev_dataloader):
                 inputs, y = data # inputs: x, q
                 inputs = [x.to(device) for x in inputs]
@@ -267,6 +280,14 @@ def run(config):
                                     (((ep + 1) / config['DEV_EPOCH'] - 1) *
                                     len(dev_dataloader) + batch_idx))
 
+                with torch.no_grad():
+                    y_hat = torch.argmax(y_hat, dim=-1).tolist()
+                    for y_pred, y_true in zip(y_hat, y):
+                        if 0 < y_true[y_pred].item():
+                            dev_results.append(1)
+                        else:
+                            dev_results.append(0)
+
             dev_loss_avg = np.mean(dev_loss)
             writer.add_scalar('dev loss', dev_loss_avg, (ep + 1) / config['DEV_EPOCH'])
             dev_losses.append(dev_loss_avg)
@@ -292,8 +313,10 @@ def run(config):
                                                    config['model_name'],
                                                    'best_model'))
 
-            logger.info("Dev Epoch:[{}]\t loss={:.3f}".format(
-                            (ep + 1) // config['DEV_EPOCH'], np.mean(dev_loss)))
+            logger.info("Dev Epoch:[{}]\tloss={:.3f}\taccuracy={:.3f}".format(
+                            (ep + 1) // config['DEV_EPOCH'],
+                            np.mean(dev_loss),
+                            np.mean(dev_results)))
 
             model.train()
 

@@ -229,7 +229,7 @@ def read_metaqa(input_file):
             train_data.append(instance)
             # for debugging
             #cnt += 1
-            #if cnt >= 5000:
+            #if cnt >= 2:
             #    return train_data
     return train_data
 
