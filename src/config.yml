@@ -25,4 +25,4 @@ model_save_path: '../models/' # trained model save directory
 model_name: '002' # build a folder for each model based on name
 
 # for inference
-read_from: 'best_model' # best_model, final_model
+read_from: 'final_model' # best_model, final_model

@@ -206,6 +206,7 @@ def run(config):
             writer.add_scalar('train loss', loss_value,
                                 ep * len(train_dataloader) + batch_idx)
 
+            # accuracy @1
             with torch.no_grad():
                 y_hat = torch.argmax(y_hat, dim=-1).tolist()
                 for y_pred, y_true in zip(y_hat, y):
@@ -214,7 +215,7 @@ def run(config):
                     else:
                         train_results.append(0)
 
-             # for statistics
+            # for statistics
             if loss_value < best_train_loss:
                 best_train_loss = loss_value
 
@@ -267,7 +268,6 @@ def run(config):
                 #    print('y_hat:', y_hat, flush=True)
                 #    y_idx = torch.argmax(y_hat)
                 #    print('y_idx', y_idx, X_rev[y_idx])
-
                 #    for name, param in model.named_parameters():
                 #        if 'dense1' == name[:6]:
                 #            print(name, param, param.requires_grad)
@@ -280,6 +280,7 @@ def run(config):
                                     (((ep + 1) / config['DEV_EPOCH'] - 1) *
                                     len(dev_dataloader) + batch_idx))
 
+                # accuracy @1
                 with torch.no_grad():
                     y_hat = torch.argmax(y_hat, dim=-1).tolist()
                     for y_pred, y_true in zip(y_hat, y):
