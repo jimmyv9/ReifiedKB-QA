@@ -79,11 +79,18 @@ def collate_fn(batch_data):
     xs = torch.LongTensor(xs)
     xs = F.one_hot(xs, num_classes=total_number).type(torch.FloatTensor)
     qs = torch.cat(qs, dim=0)
-    labels = [set(label) for label in labels]
+
+    # convert list of label to uniform distribution on labels
+    label_tensor = torch.zeros_like(xs, dtype=torch.float)
+    for idx, label in enumerate(labels):
+        label = torch.tensor(label)
+        label_tensor[idx,:].index_fill_(0, label, 1 / (len(label)))
+    labels = label_tensor
 
     # freeze for training
     xs.requires_grad = False
     qs.requires_grad = False
+    labels.requires_grad = False
 
     return [xs, qs], labels
 
@@ -162,7 +169,7 @@ def run(config):
         y_idx = y_idx[:, :5].tolist()
         for y_pred, y_true in zip(y_idx, y):
             # accuracy @1
-            if y_pred[0] in y_true:
+            if 0 < y_true[y_pred[0]].item():
                 scores.append(1)
                 results.append(y_pred[0])
             else:
@@ -172,7 +179,7 @@ def run(config):
             # MRR
             score = 0
             for i, value in enumerate(y_pred):
-                if value in y_true:
+                if 0 < y_true[value].item():
                     score = 1/(i + 1)
                     mrr_results.append(value)
                     break
