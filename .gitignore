@@ -6,3 +6,4 @@ models/
 nohup.out
 *.swp
 .nfs*
+*.out
