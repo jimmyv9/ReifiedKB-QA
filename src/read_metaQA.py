@@ -1,12 +1,12 @@
 import sys
 import os
+import re
 import string
 import numpy as np
 import time
 from functools import partial
 import gensim.downloader as api
-from gensim.models import KeyedVectors
-#import multiprocessing.dummy as mp
+from gensim.models import KeyedVectors, Word2Vec
 
 import torch
 from torch.utils.data import Dataset
@@ -135,45 +135,24 @@ def get_emb_from_model(word, model):
         return model[word]
     elif word.lower() in model.key_to_index:
         return model[word.lower()]
-    else:
-        final_emb = np.zeros(len(model["UNK"]))
-        # Check if individual words exist in model
-        for w in word.split("_"):
-            if w in model.key_to_index:
-                final_emb += model[w]
-            elif w.lower() in model.key_to_index:
-                final_emb += model[w.lower()]
-            else:
-                return model["UNK"]
-        return final_emb
+    return np.zeros(len(model[0]))
 
 def parse_entities(sentence):
     """
     Tokenizes sentence keeping entities together
     """
-    tokens = []
     entity_found = False
-    entity = ""
-    sentence = sentence.replace(",", "").replace("!", "")
-    for word in sentence.split():
-        if word[0] == "[" and word[-1] == "]":
-            entity = word[1:-1]
-            tokens.append(word[1:-1])
-        elif entity_found == True:
-            if word[-1] == ']':
-                entity += "_" + string.capwords(word[:-1])
-                tokens.append(entity)
-                entity_found = False
-            else:
-                entity += "_" + string.capwords(word)
-        elif word[0] == '[':
-            entity_found = True
-            entity = string.capwords(word[1:])
-        else:
-            tokens.append(word)
+    sentence, entity = parse_question(sentence)
+    tokens = sentence.split()
     return tokens, entity
 
-
+def parse_question(question):
+    question = question.replace(",", "").replace("!", "")
+    match = re.search("\[(.*)\]", question)
+    entity = match.group()
+    new_entity = "_".join(entity[1:-1].split())
+    question = question.replace(entity, new_entity)
+    return question, new_entity
 
 def main():
     if len(sys.argv) != 5:
@@ -203,7 +182,8 @@ def main():
         for rel in R:
             fout.write("{}\t{}\n".format(rel, R[rel]))
     start = time.time()
-    model = api.load(emb_path)
+    model = Word2Vec.load(emb_path)
+    model = model.wv
     with open(train_path, 'r') as fin:
         all_lines = fin.readlines()
     print("Loading gensim model took {} seconds".format(time.time()-start))

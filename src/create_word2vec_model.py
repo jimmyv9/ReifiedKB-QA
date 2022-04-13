@@ -1,11 +1,16 @@
+import os
+import sys
 import gensim.models
 from gensim.test.utils import datapath
 from gensim import utils
 import re
 
 class MyCorpus:
+    def __init__(self, path):
+        self.path = path
     def __iter__(self):
-        corpus_path = datapath("/Users/JPV/Documents/UT_Dallas/2022 Spring/NLP Research/ReifiedKB-QA/data/MetaQA/1-hop/vanilla/qa_train.txt")
+        os.chdir(".")
+        corpus_path = datapath(self.path)
         for line in open(corpus_path):
             line = line.split("\t")
             question, answer = line[0], line[1]
@@ -29,9 +34,14 @@ def tokenize_answer(answer):
     return " ".join(answer)
 
 def main():
-    sentences = MyCorpus()
+    if len(sys.argv) != 3:
+        print("Execute: python create_word2vec_model.py file_to_embed model_outpath")
+    to_embed = sys.argv[1]
+    outfile = sys.argv[2]
+    filename = os.path.realpath(to_embed)
+    sentences = MyCorpus(filename)
     model = gensim.models.Word2Vec(sentences=sentences, vector_size=128)
-    model.save("word2vec-metaQA-1hop")
+    model.save(outfile)
     return
 
 
