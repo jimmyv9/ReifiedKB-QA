@@ -77,36 +77,37 @@ def run(config):
     logger.info("Start testing")
 
     model.eval()
-    for data in tqdm(test_dataloader):
-        q_idx, inputs, y = data # inputs: [x, q]
-        inputs = [x.to(device) for x in inputs]
-        if 'kb_multihop' == config['task']:
-            y_hat, _ = model(*inputs)
-        else:
-            raise ValueError
-        y_sort, y_idx = torch.sort(y_hat, dim=-1, descending=True)
-        y_idx = y_idx[:, :5].tolist()
-        for y_pred, y_true in zip(y_idx, y):
-            # accuracy @1
-            if 0 < y_true[y_pred[0]].item():
-                scores.append(1)
-                results.append(y_pred[0])
+    with torch.no_grad():
+        for data in tqdm(test_dataloader):
+            q_idx, inputs, y = data # inputs: [x, q]
+            inputs = [x.to(device) for x in inputs]
+            if 'kb_multihop' == config['task']:
+                y_hat, _ = model(*inputs)
             else:
-                scores.append(0)
-                results.append(-1)
+                raise ValueError
+            y_sort, y_idx = torch.sort(y_hat, dim=-1, descending=True)
+            y_idx = y_idx[:, :5].tolist()
+            for y_pred, y_true in zip(y_idx, y):
+                # accuracy @1
+                if 0 < y_true[y_pred[0]].item():
+                    scores.append(1)
+                    results.append(y_pred[0])
+                else:
+                    scores.append(0)
+                    results.append(-1)
 
-            # MRR
-            score = 0
-            for i, value in enumerate(y_pred):
-                if 0 < y_true[value].item():
-                    score = 1/(i + 1)
-                    mrr_results.append(value)
-                    break
-            mrr_scores.append(score)
-            if 0 == score:
-                mrr_results.append(-1)
+                # MRR
+                score = 0
+                for i, value in enumerate(y_pred):
+                    if 0 < y_true[value].item():
+                        score = 1/(i + 1)
+                        mrr_results.append(value)
+                        break
+                mrr_scores.append(score)
+                if 0 == score:
+                    mrr_results.append(-1)
 
-    logger.info('Test accuracy @1: {:.3f} MRR@5: {:.3f}'.format(np.mean(scores), np.mean(mrr_scores)))
+        logger.info('Test accuracy @1: {:.3f} MRR@5: {:.3f}'.format(np.mean(scores), np.mean(mrr_scores)))
 
     entity = []
     for result in results:

@@ -2,6 +2,7 @@ import os
 import yaml
 import logging
 import numpy as np
+import tqdm
 
 import torch
 import torch.nn as nn
@@ -230,56 +231,56 @@ def run(config):
         # validation/development set
         if (ep + 1) % config['DEV_EPOCH'] == 0:
             model.eval()
-            dev_loss = []
-            dev_results = []
-            for batch_idx, data in enumerate(dev_dataloader):
-                _, inputs, y = data # inputs: x, q
-                inputs = [x.to(device) for x in inputs]
-                y = y.to(device)
-                if 'kb_multihop' == config['task']:
-                    #y_hat = model(*inputs)
-                    y_hat, r = model(*inputs) # for debugging
-                else:
-                    raise ValueError
+            with torch.no_grad():
+                dev_loss = []
+                dev_results = []
+                for batch_idx, data in enumerate(dev_dataloader):
+                    _, inputs, y = data # inputs: x, q
+                    inputs = [x.to(device) for x in inputs]
+                    y = y.to(device)
+                    if 'kb_multihop' == config['task']:
+                        #y_hat = model(*inputs)
+                        y_hat, r = model(*inputs) # for debugging
+                    else:
+                        raise ValueError
 
-                # for debugging
-                #with torch.no_grad():
-                #    x_idx = torch.argmax(inputs[0][0,:]).cpu().detach().item()
-                #    print('x:', x_idx, X_rev[x_idx], flush=True)
-                #    idxes = []
-                #    M = model.M_subj.cpu().to_dense()
-                #    for idx, triple in enumerate(M):
-                #        if 1 == triple[x_idx]:
-                #            print('x index in kb', idx, flush=True)
-                #            idxes.append(idx)
-                #    x_t = torch.sparse.mm(model.M_subj, inputs[0][:1,:].T) # (N_T, batch_size) dense
-                #    for idx in idxes:
-                #        print(x_t[idx], flush=True)
-                #    r = r[:1,:]
-                #    print('r:', r, flush=True)
-                #    r_t = torch.sparse.mm(model.M_rel, r.T) # (N_T, batch_size) dense
-                #    print('r_cal', r_t.T, flush=True)
-                #    tmp = (x_t * r_t).T
-                #    print('x_t * r_t', tmp)
-                #    print(torch.amax(tmp), torch.argmax(tmp))
-                #    y_hat = y_hat[:1, :]
-                #    print('y_hat:', y_hat, flush=True)
-                #    y_idx = torch.argmax(y_hat)
-                #    print('y_idx', y_idx, X_rev[y_idx])
-                #    for name, param in model.named_parameters():
-                #        if 'dense1' == name[:6]:
-                #            print(name, param, param.requires_grad)
-                #    input()
+                    # for debugging
+                    #with torch.no_grad():
+                    #    x_idx = torch.argmax(inputs[0][0,:]).cpu().detach().item()
+                    #    print('x:', x_idx, X_rev[x_idx], flush=True)
+                    #    idxes = []
+                    #    M = model.M_subj.cpu().to_dense()
+                    #    for idx, triple in enumerate(M):
+                    #        if 1 == triple[x_idx]:
+                    #            print('x index in kb', idx, flush=True)
+                    #            idxes.append(idx)
+                    #    x_t = torch.sparse.mm(model.M_subj, inputs[0][:1,:].T) # (N_T, batch_size) dense
+                    #    for idx in idxes:
+                    #        print(x_t[idx], flush=True)
+                    #    r = r[:1,:]
+                    #    print('r:', r, flush=True)
+                    #    r_t = torch.sparse.mm(model.M_rel, r.T) # (N_T, batch_size) dense
+                    #    print('r_cal', r_t.T, flush=True)
+                    #    tmp = (x_t * r_t).T
+                    #    print('x_t * r_t', tmp)
+                    #    print(torch.amax(tmp), torch.argmax(tmp))
+                    #    y_hat = y_hat[:1, :]
+                    #    print('y_hat:', y_hat, flush=True)
+                    #    y_idx = torch.argmax(y_hat)
+                    #    print('y_idx', y_idx, X_rev[y_idx])
+                    #    for name, param in model.named_parameters():
+                    #        if 'dense1' == name[:6]:
+                    #            print(name, param, param.requires_grad)
+                    #    input()
 
-                loss = criterion(y_hat, y)
-                loss_value = loss.item()
-                dev_loss.append(loss_value)
-                writer.add_scalar('dev loss raw', loss_value,
-                                    (((ep + 1) / config['DEV_EPOCH'] - 1) *
-                                    len(dev_dataloader) + batch_idx))
+                    loss = criterion(y_hat, y)
+                    loss_value = loss.item()
+                    dev_loss.append(loss_value)
+                    writer.add_scalar('dev loss raw', loss_value,
+                                        (((ep + 1) / config['DEV_EPOCH'] - 1) *
+                                        len(dev_dataloader) + batch_idx))
 
-                # accuracy @1
-                with torch.no_grad():
+                    # accuracy @1
                     y_hat = torch.argmax(y_hat, dim=-1).tolist()
                     for y_pred, y_true in zip(y_hat, y):
                         if 0 < y_true[y_pred].item():
@@ -319,6 +320,54 @@ def run(config):
 
             model.train()
 
+    # test immediately after training
+    # for test set
+    data = read_metaqa(config['emb_path'])
+    metaqa_test = MetaQADataset(data, M_subj.size(-1))
+    test_dataloader = DataLoader(dataset=metaqa_test,
+                                 batch_size=128,
+                                 shuffle=False,
+                                 collate_fn=collate_fn)
+
+    scores = []
+    results = []
+    mrr_scores = []
+    mrr_results = []
+
+    logger.info("Start testing")
+
+    model.eval()
+    with torch.no_grad():
+        for data in tqdm(test_dataloader):
+            q_idx, inputs, y = data # inputs: [x, q]
+            inputs = [x.to(device) for x in inputs]
+            if 'kb_multihop' == config['task']:
+                y_hat, _ = model(*inputs)
+            else:
+                raise ValueError
+            y_sort, y_idx = torch.sort(y_hat, dim=-1, descending=True)
+            y_idx = y_idx[:, :5].tolist()
+            for y_pred, y_true in zip(y_idx, y):
+                # accuracy @1
+                if 0 < y_true[y_pred[0]].item():
+                    scores.append(1)
+                    results.append(y_pred[0])
+                else:
+                    scores.append(0)
+                    results.append(-1)
+
+                # MRR
+                score = 0
+                for i, value in enumerate(y_pred):
+                    if 0 < y_true[value].item():
+                        score = 1/(i + 1)
+                        mrr_results.append(value)
+                        break
+                mrr_scores.append(score)
+                if 0 == score:
+                    mrr_results.append(-1)
+        logger.info('Test accuracy @1: {:.3f} MRR@5: {:.3f}'.format(np.mean(scores), np.mean(mrr_scores)))
+
     # save the final model
     if 1 >= len(gpus):
         model.cpu()
@@ -343,6 +392,9 @@ def run(config):
         f.write(dev_losses_str)
 
     logger.info("Finish training")
+
+    logger.info('Dense 1 weight')
+    logger.info(str(model.dense1.weight))
 
     # how to output results. set a number? or select the top k?
 
