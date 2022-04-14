@@ -68,12 +68,10 @@ def collate_fn(batch_data):
     batch_data, total_number = batch_data
     total_number = total_number[0]
 
-    # [[[x, q], label], [], ...] -> [[x, q], [], ...], [label]
+    # [[q_id, x, q_emb, label], [], ...] -> [q_id], [x], [q_emb], [label]
     batch_data = list(zip(*batch_data))
-    inputs, labels = batch_data
+    q_idx, xs, qs, labels = batch_data
 
-    # [[x, q], [], ...] -> [x], [q]
-    xs, qs = list(zip(*inputs))
 
     # convert list to tensor
     xs = torch.LongTensor(xs)
@@ -92,7 +90,7 @@ def collate_fn(batch_data):
     qs.requires_grad = False
     labels.requires_grad = False
 
-    return [xs, qs], labels
+    return q_idx, [xs, qs], labels
 
 def run(config):
     """The whole training and validate process
@@ -185,7 +183,7 @@ def run(config):
         train_results = []
         for batch_idx, data in enumerate(train_dataloader):
             # forward
-            inputs, y = data # inputs: x, q
+            _, inputs, y = data # inputs: x, q
             if 1 >= len(gpus):
                 inputs = [x.to(device) for x in inputs]
                 y = y.to(device)
@@ -235,7 +233,7 @@ def run(config):
             dev_loss = []
             dev_results = []
             for batch_idx, data in enumerate(dev_dataloader):
-                inputs, y = data # inputs: x, q
+                _, inputs, y = data # inputs: x, q
                 inputs = [x.to(device) for x in inputs]
                 y = y.to(device)
                 if 'kb_multihop' == config['task']:

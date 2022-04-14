@@ -211,14 +211,14 @@ def read_metaqa(input_file):
     with open(input_file, 'r') as fin:
         # for debugging
         #cnt = 0
-        for line in fin:
+        for idx, line in enumerate(fin):
             line = line.split('\t')
             subj = int(line[0].strip())
             q = line[1].strip()
             q = torch.tensor([float(x) for x in q.split()]).unsqueeze(0)
             a = line[2].strip().split()
             a = [int(x) for x in a]
-            instance = [[subj, q], a] # refer to page 6, paragraph 3, 2nd sentence
+            instance = [idx, subj, q, a] # refer to page 6, paragraph 3, 2nd sentence
             train_data.append(instance)
             # for debugging
             #cnt += 1
@@ -292,10 +292,8 @@ class MetaQADataset(Dataset):
     def __init__(self, data, no_of_entities):
         """Initialize the dataset
         Args:
-            data(list): a 2-D list with the structure
-                        [[input, label], [], ...]
-                        in details:
-                        [[[entity_embedding, question_embedding], objective index],
+            data(list): a 2-D list with the structure in details:
+                        [[question index, entity_index, question_embedding, objective indexes],
                          [], ...]
             no_of_entities(int): the total number of entities in KB
         """
@@ -312,8 +310,7 @@ class MetaQADataset(Dataset):
             data(list): one line of data with the structure
                         [intput, label], total_number_of_entities
                         in details:
-                        [[entity_embedding, question_embedding],
-                         objective index],
+                        [question index, entity_index, question_embedding, objective indexes],
                         total_number_of_entities
         """
         return self.data[index], self.no_of_entities

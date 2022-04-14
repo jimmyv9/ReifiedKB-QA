@@ -78,7 +78,7 @@ def run(config):
 
     model.eval()
     for data in tqdm(test_dataloader):
-        inputs, y = data
+        q_idx, inputs, y = data # inputs: [x, q]
         inputs = [x.to(device) for x in inputs]
         if 'kb_multihop' == config['task']:
             y_hat, _ = model(*inputs)
