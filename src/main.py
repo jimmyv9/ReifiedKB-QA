@@ -2,7 +2,7 @@ import os
 import yaml
 import logging
 import numpy as np
-import tqdm
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -114,14 +114,11 @@ def run(config):
     writer = SummaryWriter(tensorboard_dir) # for tensorboard
 
     # check cuda
-    gpus = []
     if config['use_cuda']:
         if torch.cuda.is_available():
-            # get gpu ids
-            gpus = [int(gpu) for gpu in config['gpus'].split(',')]
-            if 1 == len(gpus):
-                device = torch.device('cuda:{}'.format(gpus[0]))
-            logger.info('Running on CUDA {}'.format(config['gpus']))
+            # get gpu id
+            device = torch.device('cuda:{}'.format(config['gpu']))
+            logger.info('Running on CUDA {}'.format(config['gpu']))
         else:
             device = torch.device('cpu')
             logger.warning('Cannot find CUDA, using CPU')
@@ -135,15 +132,13 @@ def run(config):
 
     # read KB, get M_subj, M_rel, M_obj
     #M_subj, M_rel, M_obj, X_rev = read_KB(config) # for debugging
-    M_obj, M_rel, M_subj, X_rev = read_KB(config) # for debugging
-    if 1 >= len(gpus):
-        M_subj = M_subj.to(device)
-        M_rel = M_rel.to(device)
-        M_obj = M_obj.to(device)
-    else:
-        M_subj = M_subj.cuda()
-        M_rel = M_rel.cuda()
-        M_obj = M_obj.cuda()
+    M_subj, M_rel, M_obj, X_rev = read_KB(config) # for debugging
+    M_subj.requires_grad = False
+    M_rel.requires_grad = False
+    M_obj.requires_grad = False
+    M_subj = M_subj.to(device)
+    M_rel = M_rel.to(device)
+    M_obj = M_obj.to(device)
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
 
     # for train set
@@ -166,11 +161,7 @@ def run(config):
     # assume we have M_subj, M_rel, M_obj, and dataloaders for train and dev
     logger.info("Set up model, optimizer, and criterion")
     model, optimizer, criterion = make_model(config, [M_subj, M_rel, M_obj])
-    if 1 >= len(gpus):
-        model.to(device)
-    else:
-        model = nn.DataParallel(model, device_ids=gpus)
-        model = model.cuda()
+    model.to(device)
 
     train_losses = []
     dev_losses = []
@@ -181,16 +172,13 @@ def run(config):
     
     model.train()
     for ep in range(config['MAX_TRAIN_EPOCH']):
+        train_loss = []
         train_results = []
         for batch_idx, data in enumerate(train_dataloader):
             # forward
             _, inputs, y = data # inputs: x, q
-            if 1 >= len(gpus):
-                inputs = [x.to(device) for x in inputs]
-                y = y.to(device)
-            else:
-                inputs = [x.cuda() for x in inputs]
-                y = y.cuda()
+            inputs = [x.to(device) for x in inputs]
+            y = y.to(device)
             if 'kb_multihop' == config['task']:
                 #y_hat = model(*inputs)
                 y_hat, r = model(*inputs) # for debugging
@@ -202,6 +190,7 @@ def run(config):
             # for record
             loss_value = loss.item()
             train_losses.append(loss_value)
+            train_loss.append(loss_value)
             writer.add_scalar('train loss', loss_value,
                                 ep * len(train_dataloader) + batch_idx)
 
@@ -225,7 +214,7 @@ def run(config):
         logger.info("Train Epoch:[{}/{}]\tloss={:.3f}\tacurracy={:.3f}".format(
                         ep + 1,
                         config['MAX_TRAIN_EPOCH'],
-                        np.mean(train_losses),
+                        np.mean(train_loss),
                         np.mean(train_results)))
 
         # validation/development set
@@ -296,23 +285,14 @@ def run(config):
                 best_dev_loss = dev_loss_avg
 
                 # save the best model based on the dev/validation set
-                if 1 >= len(gpus):
-                    model.cpu()
-                    state = {'epoch': ep,
-                             'state_dict': model.state_dict(),
-                             'optimizer': optimizer.state_dict()}
-                    torch.save(state, os.path.join(config['model_save_path'],
-                                                   config['model_name'],
-                                                   'best_model'))
-                    model.to(device)
-                else:
-                    state = {'epoch': ep,
-                             'state_dict': model.module.state_dict(),
-                             'optimizer': optimizer.state_dict()}
-                    torch.save(state, os.path.join(config['model_save_path'],
-                                                   config['model_name'],
-                                                   'best_model'))
-
+                model.cpu()
+                state = {'epoch': ep,
+                         'state_dict': model.state_dict(),
+                         'optimizer': optimizer.state_dict()}
+                torch.save(state, os.path.join(config['model_save_path'],
+                                               config['model_name'],
+                                               'best_model'))
+                model.to(device)
             logger.info("Dev Epoch:[{}]\tloss={:.3f}\taccuracy={:.3f}".format(
                             (ep + 1) // config['DEV_EPOCH'],
                             np.mean(dev_loss),
@@ -366,18 +346,14 @@ def run(config):
                 mrr_scores.append(score)
                 if 0 == score:
                     mrr_results.append(-1)
+
         logger.info('Test accuracy @1: {:.3f} MRR@5: {:.3f}'.format(np.mean(scores), np.mean(mrr_scores)))
 
     # save the final model
-    if 1 >= len(gpus):
-        model.cpu()
-        state = {'epoch': ep,
-                 'state_dict': model.state_dict(),
-                 'optimizer': optimizer.state_dict()}
-    else:
-        state = {'epoch': ep,
-                 'state_dict': model.module.state_dict(),
-                 'optimizer': optimizer.state_dict()}
+    model.cpu()
+    state = {'epoch': ep,
+             'state_dict': model.state_dict(),
+             'optimizer': optimizer.state_dict()}
     torch.save(state, os.path.join(config['model_save_path'],
                                    config['model_name'],
                                    'final_model'))
@@ -395,6 +371,8 @@ def run(config):
 
     logger.info('Dense 1 weight')
     logger.info(str(model.dense1.weight))
+    logger.info('Dense 1 bias')
+    logger.info(str(model.dense1.bias))
 
     # how to output results. set a number? or select the top k?
 

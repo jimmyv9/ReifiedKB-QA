@@ -1,13 +1,13 @@
 lr: '1e-2' # learning rate
-MAX_TRAIN_EPOCH: 100 # maximum number of training epoch
-DEV_EPOCH: 20 # how many epoch during training we run a dev set
+MAX_TRAIN_EPOCH: 10 # maximum number of training epoch
+DEV_EPOCH: 5 # how many epoch during training we run a dev set
 batch_size: 512 # batch size
 N_W2V: 128 # word2vec dimension
 hidden_size: 128 # for LSTM hidden states
 task: 'kb_multihop' # kb_multihop, kb_completion, kb_lstm
 n_hop: 1 # n hop for current model
 use_cuda: True
-gpus: '3' #'0,1,2,3' # gpu ids to train the model
+gpu: '3' # gpu ids to train the model
 
 # MetaQA setting
 1_hop_path: '../data/MetaQA/1-hop/vanilla/'
@@ -22,7 +22,7 @@ relation_path: '../data/MetaQA/relation_ids.txt' # relation-index mapping
 logger_dir: '../log/' # log directory
 tensorboard_path: '../tensorboard_log/' # tensorboard log directory
 model_save_path: '../models/' # trained model save directory
-model_name: '004' # build a folder for each model based on name
+model_name: '005' # build a folder for each model based on name
 
 # for inference
 read_from: 'final_model' # best_model, final_model

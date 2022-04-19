@@ -32,8 +32,7 @@ def run(config):
     # check cuda
     if config['use_cuda']:
         if torch.cuda.is_available():
-            gpus = [int(gpu) for gpu in config['gpus'].split(',')]
-            device = torch.device('cuda:{}'.format(gpus[0]))
+            device = torch.device('cuda:{}'.format(config['gpu']))
             logger.info('Running on CUDA')
         else:
             device = torch.device('cpu')
@@ -47,6 +46,9 @@ def run(config):
 
     # read KB, get M_subj, M_rel, M_obj
     M_subj, M_rel, M_obj, X_rev = read_KB(config)
+    M_subj.requires_grad = False
+    M_rel.requires_grad = False
+    M_obj.requires_grad = False
     M_subj = M_subj.to(device)
     M_rel = M_rel.to(device)
     M_obj = M_obj.to(device)
@@ -56,8 +58,8 @@ def run(config):
     data = read_metaqa(config['emb_path'])
     metaqa_test = MetaQADataset(data, M_subj.size(-1))
     test_dataloader = DataLoader(dataset=metaqa_test,
-                                 batch_size=128,
-                                 shuffle=False,
+                                 batch_size=config['batch_size'],
+                                 shuffle=True,
                                  collate_fn=collate_fn)
 
     # train
@@ -68,6 +70,11 @@ def run(config):
     state = torch.load(os.path.join(save_dir, config['read_from']))
     model.load_state_dict(state['state_dict'])
     model.to(device)
+
+    logger.info('Dense 1 weight')
+    logger.info(str(model.dense1.weight))
+    logger.info('Dense 1 bias')
+    logger.info(str(model.dense1.bias))
 
     scores = []
     results = []
