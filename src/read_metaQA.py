@@ -3,7 +3,7 @@ import os
 import re
 import string
 import numpy as np
-import time
+import yaml
 from functools import partial
 import gensim.downloader as api
 from gensim.models import KeyedVectors, Word2Vec
@@ -154,20 +154,16 @@ def parse_question(question):
     question = question.replace(entity, new_entity)
     return question, new_entity
 
-def main():
-    if len(sys.argv) != 5:
-        print("Execute `python read_metaQA.py path_to_kb path_to_trainQA path_to_pretrained_embeddings outfile")
+def main(config):
+    if len(sys.argv) != 3:
+        print("Execute `python read_metaQA.py path_to_kb path_to_pretrained_embeddings")
         sys.exit(-1)
     kb_path = sys.argv[1]
-    train_path = sys.argv[2]
-    emb_path = sys.argv[3]
-    outfile_path = sys.argv[4]
-    #a = int(sys.argv[5])
-    #b = int(sys.argv[6])
+    emb_path = sys.argv[2]
 
     triples = read_triples(kb_path)
     X = extract_entities(triples)
-    with open("entity_ids.txt", 'w') as fout:
+    with open(config['entity_path'], 'w') as fout:
         for ent in X:
             fout.write("{}\t{}\n".format(ent, X[ent]))
     R = {}
@@ -178,32 +174,38 @@ def main():
             r_rev = "_".join([r, "rev"])
             R[r_rev] = len(R)
 
-    with open("relation_ids.txt", 'w') as fout:
+    print("relations")
+    print(R)
+    return
+    with open(config['relation_path'], 'w') as fout:
         for rel in R:
             fout.write("{}\t{}\n".format(rel, R[rel]))
-    start = time.time()
     model = Word2Vec.load(emb_path)
     model = model.wv
-    with open(train_path, 'r') as fin:
-        all_lines = fin.readlines()
-    print("Loading gensim model took {} seconds".format(time.time()-start))
-    partial_qa = partial(parallel_qa, model=model, entities=X)
-    start = time.time()
-    results = map(partial_qa, all_lines)
-    file_size = 0
-    with open(outfile_path, 'w') as fout:
-        for qa in results:
-            file_size += 1
-            if file_size % 1000 == 0:
-                print("Processed {} questions".format(file_size))
-            subj = qa[0]
-            q = qa[1]
-            a = qa[2]
-            to_print = str(subj) + "\t" # add subject's embedding
-            to_print += str(q).replace("\n", "")[1:-1] + "\t" # add question
-            to_print += str(a).replace("\n", "")[1:-1] + "\n" # add answer
-            fout.write(to_print)
-    print("Calculating/Writing {} took {} seconds".format(outfile_path, time.time()-start))
+
+    hops = ['1_hop', '2_hop', '3_hop']
+    files = ['qa_train.txt', 'qa_dev.txt', 'qa_test.txt']
+    for hop in hops:
+        for infile in files:
+
+            with open(config[hop+"_path"]+"/"+infile, 'r') as fin:
+                all_lines = fin.readlines()
+            partial_qa = partial(parallel_qa, model=model, entities=X)
+            start = time.time()
+            results = map(partial_qa, all_lines)
+            file_size = 0
+            with open(config[hop+"_output"]+infile, 'w') as fout:
+                for qa in results:
+                    file_size += 1
+                    if file_size % 1000 == 0:
+                        print("Processed {} questions".format(file_size))
+                    subj = qa[0]
+                    q = qa[1]
+                    a = qa[2]
+                    to_print = str(subj) + "\t" # add subject's embedding
+                    to_print += str(q).replace("\n", "")[1:-1] + "\t" # add question
+                    to_print += str(a).replace("\n", "")[1:-1] + "\n" # add answer
+                    fout.write(to_print)
     return 0
 
 def read_metaqa(input_file):
@@ -323,4 +325,6 @@ class MetaQADataset(Dataset):
         return self.length
 
 if __name__ == '__main__':
-    main()
+    with open("./config.yml") as f:
+        config = yaml.safe_load(f)
+    main(config)
