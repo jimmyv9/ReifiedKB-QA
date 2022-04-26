@@ -142,7 +142,7 @@ def run(config):
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
 
     # for train set
-    data = read_metaqa(config['emb_path'])
+    data = read_metaqa(config['train_emb_path'])
     metaqa_train = MetaQADataset(data, M_subj.size(-1))
     train_dataloader = DataLoader(dataset=metaqa_train,
                                   batch_size=config['batch_size'],
@@ -150,7 +150,7 @@ def run(config):
                                   collate_fn=collate_fn)
 
     # for dev/validation set
-    data = read_metaqa(config['emb_path'])
+    data = read_metaqa(config['dev_emb_path'])
     metaqa_dev = MetaQADataset(data, M_subj.size(-1))
     dev_dataloader = DataLoader(dataset=metaqa_dev,
                                 batch_size=config['batch_size'],
@@ -302,7 +302,7 @@ def run(config):
 
     # test immediately after training
     # for test set
-    data = read_metaqa(config['emb_path'])
+    data = read_metaqa(config['test_emb_path'])
     metaqa_test = MetaQADataset(data, M_subj.size(-1))
     test_dataloader = DataLoader(dataset=metaqa_test,
                                  batch_size=128,

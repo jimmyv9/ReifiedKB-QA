@@ -55,7 +55,7 @@ def run(config):
     config['N_R'] = M_rel.size(1) # add config['N_R'] here
 
     # for test set
-    data = read_metaqa(config['emb_path'])
+    data = read_metaqa(config['test_emb_path'])
     metaqa_test = MetaQADataset(data, M_subj.size(-1))
     test_dataloader = DataLoader(dataset=metaqa_test,
                                  batch_size=config['batch_size'],
