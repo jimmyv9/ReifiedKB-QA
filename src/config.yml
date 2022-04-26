@@ -13,6 +13,9 @@ gpu: '3' # gpu ids to train the model
 1_hop_path: '../data/MetaQA/1-hop/vanilla/'
 2_hop_path: '../data/MetaQA/2-hop/vanilla/'
 3_hop_path: '../data/MetaQA/3-hop/vanilla/'
+1_hop_output: '../data/embeddings/1-hop/'
+2_hop_output: '../data/embeddings/2-hop/'
+3_hop_output: '../data/embeddings/3-hop/'
 kb_path: '../data/MetaQA/kb.txt' # path for knowledge base
 emb_path: '../data/MetaQA/to_train_all.txt' # extracted question embedding path
 entity_path: '../data/MetaQA/entity_ids.txt' # entity-index mapping
