@@ -1,11 +1,10 @@
 lr: '1e-2' # learning rate
-MAX_TRAIN_EPOCH: 10 # maximum number of training epoch
-DEV_EPOCH: 5 # how many epoch during training we run a dev set
+MAX_TRAIN_EPOCH: 20 # maximum number of training epoch
+DEV_EPOCH: 1 # how many epoch during training we run a dev set
 batch_size: 512 # batch size
 N_W2V: 128 # word2vec dimension
 hidden_size: 128 # for LSTM hidden states
 task: 'kb_multihop' # kb_multihop, kb_completion, kb_lstm
-n_hop: 1 # n hop for current model
 use_cuda: True
 gpu: '3' # gpu ids to train the model
 
@@ -14,15 +13,18 @@ gpu: '3' # gpu ids to train the model
 2_hop_path: '../data/MetaQA/2-hop/vanilla/'
 3_hop_path: '../data/MetaQA/3-hop/vanilla/'
 kb_path: '../data/MetaQA/kb.txt' # path for knowledge base
-emb_path: '../data/MetaQA/to_train_all.txt' # extracted question embedding path
-entity_path: '../data/MetaQA/entity_ids.txt' # entity-index mapping
-relation_path: '../data/MetaQA/relation_ids.txt' # relation-index mapping
+n_hop: 3 # n hop for current model
+train_emb_path: '../data/MetaQA/embeddings/3-hop/qa_train.txt' # extracted train question embedding path
+dev_emb_path: '../data/MetaQA/embeddings/3-hop/qa_dev.txt' # extracted dev question embedding path
+test_emb_path: '../data/MetaQA/embeddings/3-hop/qa_test.txt' # extracted test question embedding path
+entity_path: '../data/MetaQA/embeddings/entity_ids.txt' # entity-index mapping
+relation_path: '../data/MetaQA/embeddings/relation_ids.txt' # relation-index mapping
 
 # log setting
 logger_dir: '../log/' # log directory
 tensorboard_path: '../tensorboard_log/' # tensorboard log directory
 model_save_path: '../models/' # trained model save directory
-model_name: '005' # build a folder for each model based on name
+model_name: '009' # build a folder for each model based on name
 
 # for inference
 read_from: 'final_model' # best_model, final_model
