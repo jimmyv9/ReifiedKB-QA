@@ -15,13 +15,28 @@ gpu: '3' # gpu ids to train the model
 1_hop_output: '../data/embeddings/1-hop/'
 2_hop_output: '../data/embeddings/2-hop/'
 3_hop_output: '../data/embeddings/3-hop/'
-kb_path: '../data/MetaQA/kb.txt' # path for knowledge base
+kb_path_meta_qa: '../data/MetaQA/kb.txt' # path for knowledge base
 n_hop: 3 # n hop for current model
-train_emb_path: '../data/MetaQA/embeddings/3-hop/qa_train.txt' # extracted train question embedding path
-dev_emb_path: '../data/MetaQA/embeddings/3-hop/qa_dev.txt' # extracted dev question embedding path
-test_emb_path: '../data/MetaQA/embeddings/3-hop/qa_test.txt' # extracted test question embedding path
-entity_path: '../data/MetaQA/embeddings/entity_ids.txt' # entity-index mapping
-relation_path: '../data/MetaQA/embeddings/relation_ids.txt' # relation-index mapping
+train_emb_path_meta_qa: '../data/MetaQA/embeddings/3-hop/qa_train.txt' # extracted train question embedding path
+dev_emb_path_meta_qa: '../data/MetaQA/embeddings/3-hop/qa_dev.txt' # extracted dev question embedding path
+test_emb_path_meta_qa: '../data/MetaQA/embeddings/3-hop/qa_test.txt' # extracted test question embedding path
+entity_path_meta_qa: '../data/MetaQA/embeddings/entity_ids.txt' # entity-index mapping
+relation_path_meta_qa: '../data/MetaQA/embeddings/relation_ids.txt' # relation-index mapping
+
+# WebQSP setting
+freebase: '../data/freebase-rdf-latest.gz'
+kb_path_wqsp: '../data/WebQSP/final_webqsp_kb.txt'
+train_path_wqsp: '../data/WebQSP/data/WebQSP.train.json'
+test_path_wqsp: '../data/WebQSP/data/WebQSP.test.json'
+train_path_proc: '../data/WebQSP/data/wqsp_train.txt'
+dev_path_proc: '../data/WebQSP/data/wqsp_dev.txt'
+test_path_proc: '../data/WebQSP/data/wqsp_test.txt'
+entity_path_wqsp: '../data/WebQSP/entity_map.txt'
+relation_path_wqsp: '../data/WebQSP/relation_map.txt'
+rel1_wqsp: '../data/WebQSP/relation_e2e.txt'
+rel2_wqsp: '../data/WebQSP/relation_e2c.txt'
+rel3_wqsp: '../data/WebQSP/relation_c2e.txt'
+embedding_wqsp: '../data/WebQSP/data/embeddings'
 
 # log setting
 logger_dir: '../log/' # log directory
