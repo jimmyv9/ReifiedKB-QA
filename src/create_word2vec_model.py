@@ -10,7 +10,7 @@ class MyCorpus:
         self.path = path
     def __iter__(self):
         os.chdir(".")
-        corpus_path = datapath(self.path)
+        corpus_path = "questions_all_hops.txt"
         for line in open(corpus_path):
             line = line.split("\t")
             question, answer = line[0], line[1]
@@ -35,10 +35,11 @@ def tokenize_answer(answer):
 
 def main():
     if len(sys.argv) != 3:
-        print("Execute: python create_word2vec_model.py file_to_embed model_outpath")
+        print("Execute: python create_word2vec_model.py dir_to_embed model_outpath")
     to_embed = sys.argv[1]
     outfile = sys.argv[2]
     filename = os.path.realpath(to_embed)
+    print(filename)
     sentences = MyCorpus(filename)
     model = gensim.models.Word2Vec(sentences=sentences, vector_size=128)
     model.save(outfile)
